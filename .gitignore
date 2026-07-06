@@ -5,9 +5,8 @@ AGENTS.md
 agents_docs/
 artifacts/
 
-# User-generated mascot assets are prepared locally and uploaded later.
-assets/
-public/assets/
+# Local source mascot assets remain outside the extension bundle.
+/assets/
 
 # Dependencies and build outputs.
 node_modules/
