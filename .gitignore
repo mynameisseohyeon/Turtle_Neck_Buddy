@@ -1,0 +1,21 @@
+.DS_Store
+
+# Local agent/project planning material - keep off GitHub.
+AGENTS.md
+agents_docs/
+artifacts/
+
+# User-generated mascot assets are prepared locally and uploaded later.
+assets/
+public/assets/
+
+# Dependencies and build outputs.
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Local environment files.
+.env
+.env.*
+!.env.example
