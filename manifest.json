@@ -5,5 +5,10 @@
   "description": "A cute turtle stretch reminder for your neck and shoulders.",
   "action": {
     "default_popup": "popup.html"
-  }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["storage", "alarms", "notifications"]
 }
