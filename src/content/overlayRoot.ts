@@ -9,8 +9,8 @@ import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/ove
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
 const OVERLAY_SETTINGS_STORAGE_KEY = "turtle-neck-buddy-overlay-settings";
 const STRETCH_REMINDER_TEXT = "스트레칭 시간이야";
-const IDLE_FRAME_INTERVAL_MS = 520;
-const ALERT_FRAME_INTERVAL_MS = 360;
+const IDLE_FRAME_INTERVAL_MS = 620;
+const ALERT_FRAME_INTERVAL_MS = 90;
 const REACTION_FRAME_INTERVAL_MS = 70;
 const NECK_REACTION_COOLDOWN_MS = 2400;
 const REMINDER_INTERVAL_OPTIONS: ReminderIntervalMinutes[] = [30, 50, 60];
@@ -22,18 +22,6 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
 };
 
 const FRAMES = {
-  idle: [
-    "assets/turtle/frames/quiet/quiet_01.png",
-    "assets/turtle/frames/quiet/quiet_02.png",
-    "assets/turtle/frames/quiet/quiet_03.png",
-    "assets/turtle/frames/quiet/quiet_04.png"
-  ],
-  alert: [
-    "assets/turtle/frames/alert/alert_01.png",
-    "assets/turtle/frames/alert/alert_02.png",
-    "assets/turtle/frames/alert/alert_03.png",
-    "assets/turtle/frames/alert/alert_04.png"
-  ],
   neckIn: [
     "assets/turtle/frames/neck_in/neck_in_01.png",
     "assets/turtle/frames/neck_in/neck_in_02.png",
@@ -136,13 +124,17 @@ async function updateOverlaySettings(nextSettings: OverlaySettings) {
 function startAmbientAnimation(mascot: HTMLImageElement) {
   clearAmbientAnimation();
 
-  const frames = overlayState.visibilityState === "alert" ? FRAMES.alert : FRAMES.idle;
+  const frames = overlayState.visibilityState === "alert" ? FRAMES.neckOut : FRAMES.neckIn;
   const interval = overlayState.visibilityState === "alert" ? ALERT_FRAME_INTERVAL_MS : IDLE_FRAME_INTERVAL_MS;
   ambientFrameIndex = 0;
   setMascotFrame(mascot, frames[ambientFrameIndex]);
 
   ambientTimerId = window.setInterval(() => {
     if (isReacting) {
+      return;
+    }
+
+    if (overlayState.visibilityState === "alert" && ambientFrameIndex >= frames.length - 1) {
       return;
     }
 
@@ -239,7 +231,7 @@ function renderOverlay() {
   shadowRoot.append(overlay);
 
   if (currentState === "hidden") {
-    setMascotFrame(mascot, FRAMES.idle[0]);
+    setMascotFrame(mascot, FRAMES.neckIn[0]);
     return;
   }
 
