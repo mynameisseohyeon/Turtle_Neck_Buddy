@@ -137,7 +137,9 @@
 
 .turtle-overlay-toggle,
 .turtle-overlay-segment-button,
-.turtle-overlay-stepper-button {
+.turtle-overlay-stepper-button,
+.turtle-overlay-preferences-button,
+.turtle-overlay-flag-button {
   min-height: 24px;
   border: 2px solid #213329;
   background: #fffdf7;
@@ -193,6 +195,29 @@
   font-size: 11px;
   font-weight: 800;
   text-align: center;
+}
+
+.turtle-overlay-preferences-button {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  box-shadow: 2px 2px 0 #213329;
+}
+
+.turtle-overlay-flag-segment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: 118px;
+}
+
+.turtle-overlay-flag-button {
+  width: 28px;
+  padding: 0;
+  font-size: 14px;
+}
+
+.turtle-overlay-flag-button[data-active="true"] {
+  background: #2f6e4f;
 }
 
 .turtle-overlay-mascot-stage {

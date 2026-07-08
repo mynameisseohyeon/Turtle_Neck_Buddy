@@ -17,6 +17,13 @@ const MIN_REMINDER_INTERVAL_MINUTES = 10;
 const MAX_REMINDER_INTERVAL_MINUTES = 180;
 const REMINDER_INTERVAL_STEP_MINUTES = 10;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
+const OVERLAY_LANGUAGE_FLAGS: Record<OverlayLanguage, { flag: string; label: string }> = {
+  en: { flag: "🇺🇸", label: "English" },
+  ko: { flag: "🇰🇷", label: "한국어" },
+  ja: { flag: "🇯🇵", label: "日本語" },
+  zh: { flag: "🇨🇳", label: "中文" },
+  es: { flag: "🇪🇸", label: "Español" }
+};
 const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   overlayEnabled: true,
   overlayPosition: "bottom-right",
@@ -63,7 +70,9 @@ const OVERLAY_COPY: Record<
     enabledLabel: string;
     positionLabel: string;
     intervalLabel: string;
+    preferencesLabel: string;
     languageLabel: string;
+    backLabel: string;
     left: string;
     right: string;
     minutes: string;
@@ -75,7 +84,9 @@ const OVERLAY_COPY: Record<
     enabledLabel: "Alert",
     positionLabel: "Side",
     intervalLabel: "Every",
-    languageLabel: "Lang",
+    preferencesLabel: "Prefs",
+    languageLabel: "Language",
+    backLabel: "Back",
     left: "Left",
     right: "Right",
     minutes: "min"
@@ -86,7 +97,9 @@ const OVERLAY_COPY: Record<
     enabledLabel: "알림",
     positionLabel: "위치",
     intervalLabel: "주기",
+    preferencesLabel: "환경 설정",
     languageLabel: "언어",
+    backLabel: "뒤로",
     left: "왼쪽",
     right: "오른쪽",
     minutes: "분"
@@ -97,7 +110,9 @@ const OVERLAY_COPY: Record<
     enabledLabel: "通知",
     positionLabel: "位置",
     intervalLabel: "間隔",
+    preferencesLabel: "環境設定",
     languageLabel: "言語",
+    backLabel: "戻る",
     left: "左",
     right: "右",
     minutes: "分"
@@ -108,7 +123,9 @@ const OVERLAY_COPY: Record<
     enabledLabel: "提醒",
     positionLabel: "位置",
     intervalLabel: "间隔",
+    preferencesLabel: "偏好设置",
     languageLabel: "语言",
+    backLabel: "返回",
     left: "左",
     right: "右",
     minutes: "分钟"
@@ -119,7 +136,9 @@ const OVERLAY_COPY: Record<
     enabledLabel: "Aviso",
     positionLabel: "Lado",
     intervalLabel: "Cada",
+    preferencesLabel: "Preferencias",
     languageLabel: "Idioma",
+    backLabel: "Atrás",
     left: "Izq.",
     right: "Der.",
     minutes: "min"
@@ -128,7 +147,7 @@ const OVERLAY_COPY: Record<
 
 let overlayState: OverlayViewState = INITIAL_OVERLAY_VIEW_STATE;
 let overlaySettings: OverlaySettings = DEFAULT_OVERLAY_SETTINGS;
-let bubbleMode: "reminder" | "settings" = "reminder";
+let bubbleMode: "reminder" | "settings" | "preferences" = "reminder";
 let ambientTimerId: number | undefined;
 let reactionTimerId: number | undefined;
 let ambientFrameIndex = 0;
@@ -284,8 +303,13 @@ async function saveCustomPositionFromPointer(clientX: number, clientY: number) {
   });
 }
 
-function toggleSettingsBubble() {
-  bubbleMode = bubbleMode === "settings" ? "reminder" : "settings";
+function openSettingsBubble() {
+  bubbleMode = "settings";
+  renderOverlay();
+}
+
+function openPreferencesBubble() {
+  bubbleMode = "preferences";
   renderOverlay();
 }
 
@@ -462,7 +486,7 @@ function renderOverlay() {
       return;
     }
 
-    toggleSettingsBubble();
+    openSettingsBubble();
   });
 
   const bubble = document.createElement("div");
@@ -471,11 +495,14 @@ function renderOverlay() {
   if (bubbleMode === "settings") {
     bubble.dataset.mode = "settings";
     bubble.append(createSettingsBubbleContent());
+  } else if (bubbleMode === "preferences") {
+    bubble.dataset.mode = "settings";
+    bubble.append(createPreferencesBubbleContent());
   } else {
     bubble.textContent = overlayState.message || getOverlayCopy().reminder;
     bubble.addEventListener("click", (event) => {
       event.stopPropagation();
-      toggleSettingsBubble();
+      openSettingsBubble();
     });
   }
 
@@ -608,26 +635,13 @@ function createSettingsBubbleContent() {
   });
   intervalGroup.append(decreaseButton, intervalValue, increaseButton);
 
-  const languageLabel = document.createElement("span");
-  languageLabel.className = "turtle-overlay-settings-label";
-  languageLabel.textContent = copy.languageLabel;
-
-  const languageGroup = document.createElement("div");
-  languageGroup.className = "turtle-overlay-segment turtle-overlay-language-segment";
-  OVERLAY_LANGUAGE_OPTIONS.forEach((language) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "turtle-overlay-segment-button";
-    button.dataset.active = String(overlaySettings.language === language);
-    button.textContent = language.toUpperCase();
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      void updateOverlaySettings({
-        ...overlaySettings,
-        language
-      });
-    });
-    languageGroup.append(button);
+  const preferencesButton = document.createElement("button");
+  preferencesButton.type = "button";
+  preferencesButton.className = "turtle-overlay-preferences-button";
+  preferencesButton.textContent = copy.preferencesLabel;
+  preferencesButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openPreferencesBubble();
   });
 
   settings.append(
@@ -638,11 +652,58 @@ function createSettingsBubbleContent() {
     positionGroup,
     intervalLabel,
     intervalGroup,
-    languageLabel,
-    languageGroup
+    preferencesButton
   );
 
   return settings;
+}
+
+function createPreferencesBubbleContent() {
+  const copy = getOverlayCopy();
+  const preferences = document.createElement("div");
+  preferences.className = "turtle-overlay-settings turtle-overlay-preferences";
+
+  const title = document.createElement("strong");
+  title.className = "turtle-overlay-settings-title";
+  title.textContent = copy.preferencesLabel;
+
+  const languageLabel = document.createElement("span");
+  languageLabel.className = "turtle-overlay-settings-label";
+  languageLabel.textContent = copy.languageLabel;
+
+  const languageGroup = document.createElement("div");
+  languageGroup.className = "turtle-overlay-flag-segment";
+  OVERLAY_LANGUAGE_OPTIONS.forEach((language) => {
+    const languageOption = OVERLAY_LANGUAGE_FLAGS[language];
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "turtle-overlay-flag-button";
+    button.dataset.active = String(overlaySettings.language === language);
+    button.textContent = languageOption.flag;
+    button.setAttribute("aria-label", languageOption.label);
+    button.title = languageOption.label;
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void updateOverlaySettings({
+        ...overlaySettings,
+        language
+      });
+    });
+    languageGroup.append(button);
+  });
+
+  const backButton = document.createElement("button");
+  backButton.type = "button";
+  backButton.className = "turtle-overlay-preferences-button";
+  backButton.textContent = copy.backLabel;
+  backButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openSettingsBubble();
+  });
+
+  preferences.append(title, languageLabel, languageGroup, backButton);
+
+  return preferences;
 }
 
 try {
