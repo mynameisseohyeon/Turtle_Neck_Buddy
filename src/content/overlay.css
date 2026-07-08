@@ -122,7 +122,8 @@
 }
 
 .turtle-overlay-toggle,
-.turtle-overlay-segment-button {
+.turtle-overlay-segment-button,
+.turtle-overlay-stepper-button {
   min-height: 24px;
   border: 2px solid #213329;
   background: #fffdf7;
@@ -154,6 +155,30 @@
 
 .turtle-overlay-segment-button {
   padding: 0 6px;
+}
+
+.turtle-overlay-language-segment {
+  flex-wrap: wrap;
+  max-width: 116px;
+}
+
+.turtle-overlay-stepper {
+  display: grid;
+  grid-template-columns: 24px minmax(54px, auto) 24px;
+  gap: 4px;
+  align-items: center;
+}
+
+.turtle-overlay-stepper-button {
+  width: 24px;
+  padding: 0;
+}
+
+.turtle-overlay-stepper-value {
+  min-width: 54px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .turtle-overlay-mascot-stage {

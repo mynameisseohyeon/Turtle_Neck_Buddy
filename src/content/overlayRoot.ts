@@ -1,23 +1,29 @@
 import overlayStyle from "./overlay.css?inline";
 import type {
   BackgroundToOverlayMessage,
+  OverlayLanguage,
   OverlaySettings,
-  ReminderIntervalMinutes
 } from "../shared/overlayMessages";
 import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/overlayState";
 
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
 const OVERLAY_SETTINGS_STORAGE_KEY = "turtle-neck-buddy-overlay-settings";
-const STRETCH_REMINDER_TEXT = "스트레칭 시간이야";
+const STRETCH_REMINDER_TEXT = "Time to stretch.";
 const IDLE_FRAME_INTERVAL_MS = 620;
 const ALERT_FRAME_INTERVAL_MS = 90;
 const REACTION_FRAME_INTERVAL_MS = 70;
 const NECK_REACTION_COOLDOWN_MS = 2400;
-const REMINDER_INTERVAL_OPTIONS: ReminderIntervalMinutes[] = [30, 50, 60];
+const MIN_REMINDER_INTERVAL_MINUTES = 10;
+const MAX_REMINDER_INTERVAL_MINUTES = 180;
+const REMINDER_INTERVAL_STEP_MINUTES = 10;
+const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
 const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   overlayEnabled: true,
   overlayPosition: "bottom-right",
-  reminderIntervalMinutes: 50,
+  reminderIntervalMinutes: 30,
+  language: "en",
+  customPosition: null,
+  lastReminderShownAt: null,
   excludedHostnames: []
 };
 const INITIAL_VISIBLE_OVERLAY_STATE: OverlayViewState = {
@@ -49,6 +55,77 @@ const FRAMES = {
   ]
 } as const;
 
+const OVERLAY_COPY: Record<
+  OverlayLanguage,
+  {
+    reminder: string;
+    settingsTitle: string;
+    enabledLabel: string;
+    positionLabel: string;
+    intervalLabel: string;
+    languageLabel: string;
+    left: string;
+    right: string;
+    minutes: string;
+  }
+> = {
+  en: {
+    reminder: "Time to stretch.",
+    settingsTitle: "Stretch settings",
+    enabledLabel: "Alert",
+    positionLabel: "Side",
+    intervalLabel: "Every",
+    languageLabel: "Lang",
+    left: "Left",
+    right: "Right",
+    minutes: "min"
+  },
+  ko: {
+    reminder: "스트레칭 시간이야.",
+    settingsTitle: "스트레칭 설정",
+    enabledLabel: "알림",
+    positionLabel: "위치",
+    intervalLabel: "주기",
+    languageLabel: "언어",
+    left: "왼쪽",
+    right: "오른쪽",
+    minutes: "분"
+  },
+  ja: {
+    reminder: "ストレッチの時間だよ。",
+    settingsTitle: "ストレッチ設定",
+    enabledLabel: "通知",
+    positionLabel: "位置",
+    intervalLabel: "間隔",
+    languageLabel: "言語",
+    left: "左",
+    right: "右",
+    minutes: "分"
+  },
+  zh: {
+    reminder: "该伸展一下了。",
+    settingsTitle: "伸展设置",
+    enabledLabel: "提醒",
+    positionLabel: "位置",
+    intervalLabel: "间隔",
+    languageLabel: "语言",
+    left: "左",
+    right: "右",
+    minutes: "分钟"
+  },
+  es: {
+    reminder: "Hora de estirarte.",
+    settingsTitle: "Ajustes",
+    enabledLabel: "Aviso",
+    positionLabel: "Lado",
+    intervalLabel: "Cada",
+    languageLabel: "Idioma",
+    left: "Izq.",
+    right: "Der.",
+    minutes: "min"
+  }
+};
+
 let overlayState: OverlayViewState = INITIAL_OVERLAY_VIEW_STATE;
 let overlaySettings: OverlaySettings = DEFAULT_OVERLAY_SETTINGS;
 let bubbleMode: "reminder" | "settings" = "reminder";
@@ -68,11 +145,7 @@ function normalizeOverlaySettings(value: unknown): OverlaySettings {
     candidate.overlayPosition === "bottom-left" || candidate.overlayPosition === "bottom-right"
       ? candidate.overlayPosition
       : DEFAULT_OVERLAY_SETTINGS.overlayPosition;
-  const reminderIntervalMinutes = REMINDER_INTERVAL_OPTIONS.includes(
-    candidate.reminderIntervalMinutes as ReminderIntervalMinutes
-  )
-    ? (candidate.reminderIntervalMinutes as ReminderIntervalMinutes)
-    : DEFAULT_OVERLAY_SETTINGS.reminderIntervalMinutes;
+  const reminderIntervalMinutes = normalizeReminderIntervalMinutes(candidate.reminderIntervalMinutes);
 
   return {
     overlayEnabled:
@@ -81,10 +154,50 @@ function normalizeOverlaySettings(value: unknown): OverlaySettings {
         : DEFAULT_OVERLAY_SETTINGS.overlayEnabled,
     overlayPosition,
     reminderIntervalMinutes,
+    language: isOverlayLanguage(candidate.language) ? candidate.language : DEFAULT_OVERLAY_SETTINGS.language,
+    customPosition: normalizeCustomPosition(candidate.customPosition),
+    lastReminderShownAt:
+      typeof candidate.lastReminderShownAt === "string"
+        ? candidate.lastReminderShownAt
+        : DEFAULT_OVERLAY_SETTINGS.lastReminderShownAt,
     excludedHostnames: Array.isArray(candidate.excludedHostnames)
       ? candidate.excludedHostnames.filter((hostname) => typeof hostname === "string")
       : DEFAULT_OVERLAY_SETTINGS.excludedHostnames
   };
+}
+
+function isOverlayLanguage(value: unknown): value is OverlayLanguage {
+  return OVERLAY_LANGUAGE_OPTIONS.includes(value as OverlayLanguage);
+}
+
+function normalizeReminderIntervalMinutes(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_OVERLAY_SETTINGS.reminderIntervalMinutes;
+  }
+
+  const steppedValue = Math.round(value / REMINDER_INTERVAL_STEP_MINUTES) * REMINDER_INTERVAL_STEP_MINUTES;
+  return Math.min(MAX_REMINDER_INTERVAL_MINUTES, Math.max(MIN_REMINDER_INTERVAL_MINUTES, steppedValue));
+}
+
+function normalizeCustomPosition(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Partial<NonNullable<OverlaySettings["customPosition"]>>;
+
+  if (typeof candidate.xPercent !== "number" || typeof candidate.yPercent !== "number") {
+    return null;
+  }
+
+  return {
+    xPercent: Math.min(95, Math.max(5, candidate.xPercent)),
+    yPercent: Math.min(95, Math.max(5, candidate.yPercent))
+  };
+}
+
+function getOverlayCopy() {
+  return OVERLAY_COPY[overlaySettings.language] ?? OVERLAY_COPY.en;
 }
 
 function getRuntimeAssetUrl(path: string) {
@@ -228,7 +341,7 @@ function renderOverlay() {
     bubble.dataset.mode = "settings";
     bubble.append(createSettingsBubbleContent());
   } else {
-    bubble.textContent = overlayState.message || STRETCH_REMINDER_TEXT;
+    bubble.textContent = overlayState.message || getOverlayCopy().reminder;
   }
 
   mascotStage.append(mascot);
@@ -247,7 +360,7 @@ function showReminder() {
   overlayState = {
     visibilityState: "alert",
     turtleState: "idle",
-    message: STRETCH_REMINDER_TEXT
+    message: getOverlayCopy().reminder
   };
   renderOverlay();
 }
@@ -265,16 +378,17 @@ function hideOverlay() {
 }
 
 function createSettingsBubbleContent() {
+  const copy = getOverlayCopy();
   const settings = document.createElement("div");
   settings.className = "turtle-overlay-settings";
 
   const title = document.createElement("strong");
   title.className = "turtle-overlay-settings-title";
-  title.textContent = "스트레칭 설정";
+  title.textContent = copy.settingsTitle;
 
   const enabledLabel = document.createElement("span");
   enabledLabel.className = "turtle-overlay-settings-label";
-  enabledLabel.textContent = "알림";
+  enabledLabel.textContent = copy.enabledLabel;
 
   const enabledButton = document.createElement("button");
   enabledButton.type = "button";
@@ -291,13 +405,13 @@ function createSettingsBubbleContent() {
 
   const positionLabel = document.createElement("span");
   positionLabel.className = "turtle-overlay-settings-label";
-  positionLabel.textContent = "위치";
+  positionLabel.textContent = copy.positionLabel;
 
   const positionGroup = document.createElement("div");
   positionGroup.className = "turtle-overlay-segment";
   [
-    { label: "왼쪽", value: "bottom-left" },
-    { label: "오른쪽", value: "bottom-right" }
+    { label: copy.left, value: "bottom-left" },
+    { label: copy.right, value: "bottom-right" }
   ].forEach((option) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -316,27 +430,74 @@ function createSettingsBubbleContent() {
 
   const intervalLabel = document.createElement("span");
   intervalLabel.className = "turtle-overlay-settings-label";
-  intervalLabel.textContent = "주기";
+  intervalLabel.textContent = copy.intervalLabel;
 
   const intervalGroup = document.createElement("div");
-  intervalGroup.className = "turtle-overlay-segment";
-  REMINDER_INTERVAL_OPTIONS.forEach((minutes) => {
+  intervalGroup.className = "turtle-overlay-stepper";
+  const decreaseButton = document.createElement("button");
+  decreaseButton.type = "button";
+  decreaseButton.className = "turtle-overlay-stepper-button";
+  decreaseButton.textContent = "-";
+  decreaseButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void updateOverlaySettings({
+      ...overlaySettings,
+      reminderIntervalMinutes: normalizeReminderIntervalMinutes(
+        overlaySettings.reminderIntervalMinutes - REMINDER_INTERVAL_STEP_MINUTES
+      )
+    });
+  });
+  const intervalValue = document.createElement("span");
+  intervalValue.className = "turtle-overlay-stepper-value";
+  intervalValue.textContent = `${overlaySettings.reminderIntervalMinutes}${copy.minutes}`;
+  const increaseButton = document.createElement("button");
+  increaseButton.type = "button";
+  increaseButton.className = "turtle-overlay-stepper-button";
+  increaseButton.textContent = "+";
+  increaseButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void updateOverlaySettings({
+      ...overlaySettings,
+      reminderIntervalMinutes: normalizeReminderIntervalMinutes(
+        overlaySettings.reminderIntervalMinutes + REMINDER_INTERVAL_STEP_MINUTES
+      )
+    });
+  });
+  intervalGroup.append(decreaseButton, intervalValue, increaseButton);
+
+  const languageLabel = document.createElement("span");
+  languageLabel.className = "turtle-overlay-settings-label";
+  languageLabel.textContent = copy.languageLabel;
+
+  const languageGroup = document.createElement("div");
+  languageGroup.className = "turtle-overlay-segment turtle-overlay-language-segment";
+  OVERLAY_LANGUAGE_OPTIONS.forEach((language) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "turtle-overlay-segment-button";
-    button.dataset.active = String(overlaySettings.reminderIntervalMinutes === minutes);
-    button.textContent = `${minutes}분`;
+    button.dataset.active = String(overlaySettings.language === language);
+    button.textContent = language.toUpperCase();
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       void updateOverlaySettings({
         ...overlaySettings,
-        reminderIntervalMinutes: minutes as ReminderIntervalMinutes
+        language
       });
     });
-    intervalGroup.append(button);
+    languageGroup.append(button);
   });
 
-  settings.append(title, enabledLabel, enabledButton, positionLabel, positionGroup, intervalLabel, intervalGroup);
+  settings.append(
+    title,
+    enabledLabel,
+    enabledButton,
+    positionLabel,
+    positionGroup,
+    intervalLabel,
+    intervalGroup,
+    languageLabel,
+    languageGroup
+  );
 
   return settings;
 }
