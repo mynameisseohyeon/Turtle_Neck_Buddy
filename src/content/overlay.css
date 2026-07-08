@@ -1,14 +1,14 @@
 :host {
   all: initial;
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  right: 0;
+  bottom: 18px;
   z-index: 2147483647;
   pointer-events: none;
 }
 
 .turtle-overlay {
-  width: 220px;
+  width: 178px;
   color: #213329;
   font-family:
     Inter,
@@ -18,7 +18,7 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  transform: translateX(68%);
+  transform: translateX(46%);
   transition:
     opacity 180ms ease,
     transform 320ms ease;
@@ -31,7 +31,7 @@
 
 .turtle-overlay[data-state="peeking"] {
   opacity: 1;
-  transform: translateX(62%);
+  transform: translateX(58%);
 }
 
 .turtle-overlay[data-state="alert"],
@@ -43,55 +43,61 @@
 
 .turtle-overlay-card {
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 2px solid #213329;
-  border-radius: 8px;
-  background: #fffdf7;
-  box-shadow: 0 8px 20px rgba(33, 51, 41, 0.18);
+  justify-items: center;
+  gap: 6px;
+  padding: 0;
   pointer-events: auto;
 }
 
 .turtle-overlay-mascot {
   display: block;
-  width: 128px;
-  height: 96px;
+  width: 154px;
+  height: 124px;
   object-fit: contain;
   image-rendering: pixelated;
   justify-self: center;
+  filter: drop-shadow(0 8px 8px rgba(20, 30, 24, 0.22));
 }
 
 .turtle-overlay-message {
   margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #f4cd67;
+  max-width: 150px;
   font-size: 14px;
   font-weight: 800;
   line-height: 1.35;
   text-align: center;
+  text-shadow:
+    0 1px 0 #fffdf7,
+    1px 0 0 #fffdf7,
+    0 -1px 0 #fffdf7,
+    -1px 0 0 #fffdf7;
 }
 
 .turtle-overlay-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  gap: 6px;
 }
 
 .turtle-overlay-button {
-  min-height: 34px;
-  border: 2px solid #213329;
-  border-radius: 8px;
-  background: #fffdf7;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #213329;
   cursor: pointer;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-shadow:
+    0 1px 0 #fffdf7,
+    1px 0 0 #fffdf7,
+    0 -1px 0 #fffdf7,
+    -1px 0 0 #fffdf7;
 }
 
 .turtle-overlay-button-primary {
-  background: #2f6e4f;
-  color: #ffffff;
+  color: #2f6e4f;
 }
