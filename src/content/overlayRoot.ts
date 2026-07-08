@@ -1,10 +1,10 @@
 import overlayStyle from "./overlay.css?inline";
-import { TURTLE_MESSAGES } from "../shared/messages";
 import type { BackgroundToOverlayMessage } from "../shared/overlayMessages";
 import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/overlayState";
 
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
-const DEFAULT_REMINDER_MESSAGE = "목 쉬는 시간이에요.";
+const TURTLE_ONLY_FRAME = "assets/turtle/frames/quiet/quiet_01.png";
+const STRETCH_REMINDER_TEXT = "스트레칭 시간이야";
 
 let overlayState: OverlayViewState = INITIAL_OVERLAY_VIEW_STATE;
 
@@ -36,52 +36,27 @@ function renderOverlay() {
   overlay.dataset.overlayApp = "true";
   overlay.className = "turtle-overlay";
   overlay.dataset.state = currentState;
-  overlay.setAttribute("aria-live", "polite");
-
-  const card = document.createElement("div");
-  card.className = "turtle-overlay-card";
+  overlay.setAttribute("aria-hidden", "true");
 
   const mascot = document.createElement("img");
   mascot.className = "turtle-overlay-mascot";
   mascot.alt = "";
   mascot.draggable = false;
-  mascot.src = chrome.runtime.getURL("assets/turtle/frames/idle/idle_01.png");
+  mascot.src = chrome.runtime.getURL(TURTLE_ONLY_FRAME);
 
-  const message = document.createElement("p");
-  message.className = "turtle-overlay-message";
-  message.textContent = overlayState.message || DEFAULT_REMINDER_MESSAGE;
+  const bubble = document.createElement("p");
+  bubble.className = "turtle-overlay-bubble";
+  bubble.textContent = overlayState.message || STRETCH_REMINDER_TEXT;
 
-  const actions = document.createElement("div");
-  actions.className = "turtle-overlay-actions";
-
-  const startButton = document.createElement("button");
-  startButton.type = "button";
-  startButton.className = "turtle-overlay-button turtle-overlay-button-primary";
-  startButton.textContent = "30초 시작";
-  startButton.addEventListener("click", () => {
-    chrome.runtime.sendMessage({
-      type: "START_STRETCH_TIMER",
-      payload: { durationSeconds: 30 }
-    });
-  });
-
-  const closeButton = document.createElement("button");
-  closeButton.type = "button";
-  closeButton.className = "turtle-overlay-button";
-  closeButton.textContent = "닫기";
-  closeButton.addEventListener("click", hideOverlay);
-
-  actions.append(startButton, closeButton);
-  card.append(mascot, message, actions);
-  overlay.append(card);
+  overlay.append(bubble, mascot);
   shadowRoot.append(overlay);
 }
 
 function showReminder() {
   overlayState = {
     visibilityState: "alert",
-    turtleState: "alert",
-    message: TURTLE_MESSAGES.alert
+    turtleState: "idle",
+    message: STRETCH_REMINDER_TEXT
   };
   renderOverlay();
 }
