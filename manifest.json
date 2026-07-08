@@ -9,6 +9,13 @@
     "type": "module"
   },
   "permissions": ["storage", "alarms", "notifications", "activeTab", "scripting"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content/overlay.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "web_accessible_resources": [
     {
