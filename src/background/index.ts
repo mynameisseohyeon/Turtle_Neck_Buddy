@@ -127,10 +127,40 @@ async function showOverlayInActiveTab() {
   }
 }
 
+async function showOverlayFromActionClick(tab: chrome.tabs.Tab) {
+  const supportedOrigin = getSupportedOrigin(tab.url);
+
+  if (!tab.id || !supportedOrigin) {
+    return;
+  }
+
+  const message: BackgroundToOverlayMessage = {
+    type: "SHOW_STRETCH_REMINDER",
+    payload: {
+      reminderId: `action-${Date.now()}`,
+      triggeredAt: new Date().toISOString()
+    }
+  };
+
+  try {
+    await chrome.tabs.sendMessage(tab.id, message);
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: [OVERLAY_SCRIPT_FILE]
+    });
+    await chrome.tabs.sendMessage(tab.id, message);
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   void saveDefaultOverlaySettings().then((settings) => {
     scheduleReminderAlarm(settings.reminderIntervalMinutes);
   });
+});
+
+chrome.action.onClicked.addListener((tab) => {
+  void showOverlayFromActionClick(tab);
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {

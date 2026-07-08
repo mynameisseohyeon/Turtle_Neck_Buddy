@@ -3,9 +3,7 @@
   "name": "Turtle Neck Buddy",
   "version": "0.1.0",
   "description": "A cute turtle stretch reminder for your neck and shoulders.",
-  "action": {
-    "default_popup": "popup.html"
-  },
+  "action": {},
   "background": {
     "service_worker": "background.js",
     "type": "module"
