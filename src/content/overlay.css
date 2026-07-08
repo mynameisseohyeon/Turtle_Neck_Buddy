@@ -13,6 +13,11 @@
   left: 0;
 }
 
+:host([data-custom-position="true"]) {
+  right: auto;
+  bottom: auto;
+}
+
 .turtle-overlay {
   display: grid;
   justify-items: end;
@@ -26,6 +31,15 @@
 :host([data-position="bottom-left"]) .turtle-overlay {
   justify-items: start;
   transform: translateX(-54%);
+}
+
+:host([data-custom-position="true"]) .turtle-overlay,
+:host([data-custom-position="true"]) .turtle-overlay[data-state="hidden"],
+:host([data-custom-position="true"]) .turtle-overlay[data-state="peeking"],
+:host([data-custom-position="true"]) .turtle-overlay[data-state="alert"],
+:host([data-custom-position="true"]) .turtle-overlay[data-state="stretch"],
+:host([data-custom-position="true"]) .turtle-overlay[data-state="success"] {
+  transform: translateX(0);
 }
 
 .turtle-overlay[data-state="hidden"] {
@@ -189,8 +203,14 @@
   height: 286px;
   overflow: visible;
   pointer-events: auto;
+  cursor: grab;
   transform-origin: 78% 100%;
   animation: turtle-gentle-breathe 1800ms steps(3, end) infinite;
+  touch-action: none;
+}
+
+.turtle-overlay-mascot-stage:active {
+  cursor: grabbing;
 }
 
 :host([data-position="bottom-left"]) .turtle-overlay-mascot-stage {

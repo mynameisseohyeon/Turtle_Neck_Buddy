@@ -133,6 +133,9 @@ let ambientTimerId: number | undefined;
 let reactionTimerId: number | undefined;
 let ambientFrameIndex = 0;
 let isReacting = false;
+let isDragging = false;
+let didJustDrag = false;
+let dragOffset = { x: 0, y: 0 };
 let nextNeckReactionAt = 0;
 
 function normalizeOverlaySettings(value: unknown): OverlaySettings {
@@ -239,6 +242,15 @@ async function updateOverlaySettings(nextSettings: OverlaySettings) {
   renderOverlay();
 }
 
+async function saveCustomPositionFromPointer(clientX: number, clientY: number) {
+  const xPercent = (clientX / window.innerWidth) * 100;
+  const yPercent = (clientY / window.innerHeight) * 100;
+  await updateOverlaySettings({
+    ...overlaySettings,
+    customPosition: normalizeCustomPosition({ xPercent, yPercent })
+  });
+}
+
 function startAmbientAnimation(mascot: HTMLImageElement) {
   clearAmbientAnimation();
 
@@ -264,7 +276,7 @@ function startAmbientAnimation(mascot: HTMLImageElement) {
 function playNeckReaction(mascot: HTMLImageElement) {
   const now = Date.now();
 
-  if (isReacting || now < nextNeckReactionAt || overlayState.visibilityState === "hidden") {
+  if (isDragging || isReacting || now < nextNeckReactionAt || overlayState.visibilityState === "hidden") {
     return;
   }
 
@@ -313,6 +325,20 @@ function renderOverlay() {
   const host = shadowRoot.host as HTMLElement;
   host.dataset.position = overlaySettings.overlayPosition;
 
+  if (overlaySettings.customPosition) {
+    host.dataset.customPosition = "true";
+    host.style.left = `${overlaySettings.customPosition.xPercent}%`;
+    host.style.top = `${overlaySettings.customPosition.yPercent}%`;
+    host.style.right = "auto";
+    host.style.bottom = "auto";
+  } else {
+    delete host.dataset.customPosition;
+    host.style.removeProperty("left");
+    host.style.removeProperty("top");
+    host.style.removeProperty("right");
+    host.style.removeProperty("bottom");
+  }
+
   shadowRoot.querySelector("[data-overlay-app]")?.remove();
 
   const overlay = document.createElement("section");
@@ -329,7 +355,51 @@ function renderOverlay() {
   const mascotStage = document.createElement("div");
   mascotStage.className = "turtle-overlay-mascot-stage";
   mascotStage.addEventListener("pointerenter", () => playNeckReaction(mascot));
+  mascotStage.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const hostRect = host.getBoundingClientRect();
+    isDragging = true;
+    dragOffset = {
+      x: event.clientX - hostRect.left,
+      y: event.clientY - hostRect.top
+    };
+    mascotStage.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  mascotStage.addEventListener("pointermove", (event) => {
+    if (!isDragging) {
+      return;
+    }
+
+    const x = Math.min(window.innerWidth - 24, Math.max(24, event.clientX - dragOffset.x));
+    const y = Math.min(window.innerHeight - 24, Math.max(24, event.clientY - dragOffset.y));
+    host.dataset.customPosition = "true";
+    host.style.left = `${x}px`;
+    host.style.top = `${y}px`;
+    host.style.right = "auto";
+    host.style.bottom = "auto";
+  });
+  mascotStage.addEventListener("pointerup", (event) => {
+    if (!isDragging) {
+      return;
+    }
+
+    isDragging = false;
+    didJustDrag = true;
+    mascotStage.releasePointerCapture(event.pointerId);
+    void saveCustomPositionFromPointer(event.clientX - dragOffset.x, event.clientY - dragOffset.y);
+    window.setTimeout(() => {
+      didJustDrag = false;
+    }, 0);
+  });
   mascotStage.addEventListener("click", () => {
+    if (isDragging || didJustDrag) {
+      return;
+    }
+
     bubbleMode = bubbleMode === "settings" ? "reminder" : "settings";
     renderOverlay();
   });
