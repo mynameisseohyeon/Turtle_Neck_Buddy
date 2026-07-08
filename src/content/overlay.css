@@ -184,6 +184,10 @@
   user-select: none;
 }
 
+:host([data-position="bottom-left"]) .turtle-overlay-mascot {
+  transform: scaleX(-1);
+}
+
 @keyframes turtle-gentle-breathe {
   0%,
   100% {
