@@ -10,7 +10,7 @@
 .turtle-overlay {
   display: grid;
   justify-items: end;
-  width: 160px;
+  width: 190px;
   transform: translateX(46%);
   transition:
     opacity 180ms ease,
@@ -36,7 +36,7 @@
 
 .turtle-overlay-bubble {
   position: relative;
-  margin: 0 26px -4px 0;
+  margin: 0 24px -2px 0;
   padding: 7px 9px;
   border: 2px solid #213329;
   background: #fffdf7;
@@ -53,6 +53,7 @@
   letter-spacing: 0;
   white-space: nowrap;
   box-shadow: 2px 2px 0 #213329;
+  animation: turtle-bubble-float 1600ms steps(2, end) infinite;
 }
 
 .turtle-overlay-bubble::after {
@@ -68,11 +69,51 @@
   transform: rotate(45deg);
 }
 
+.turtle-overlay-mascot-stage {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: 190px;
+  height: 286px;
+  overflow: visible;
+  pointer-events: auto;
+  transform-origin: 78% 100%;
+  animation: turtle-gentle-breathe 1800ms steps(3, end) infinite;
+}
+
 .turtle-overlay-mascot {
   display: block;
-  width: 160px;
+  max-width: 180px;
+  max-height: 286px;
+  width: auto;
   height: auto;
   object-fit: contain;
   image-rendering: pixelated;
   user-select: none;
+}
+
+@keyframes turtle-gentle-breathe {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  40% {
+    transform: translateY(-2px) rotate(-1deg);
+  }
+
+  70% {
+    transform: translateY(1px) rotate(1deg);
+  }
+}
+
+@keyframes turtle-bubble-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-2px);
+  }
 }
