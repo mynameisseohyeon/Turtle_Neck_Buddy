@@ -39,11 +39,11 @@
 
 .turtle-overlay[data-state="peeking"] {
   opacity: 1;
-  transform: translateX(62%);
+  transform: translateX(18%);
 }
 
 :host([data-position="bottom-left"]) .turtle-overlay[data-state="peeking"] {
-  transform: translateX(-62%);
+  transform: translateX(-18%);
 }
 
 .turtle-overlay[data-state="alert"],

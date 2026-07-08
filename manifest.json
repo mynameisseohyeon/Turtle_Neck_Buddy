@@ -9,6 +9,7 @@
     "type": "module"
   },
   "permissions": ["storage", "alarms", "notifications", "activeTab", "scripting"],
+  "host_permissions": ["http://*/*", "https://*/*"],
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
@@ -16,7 +17,6 @@
       "run_at": "document_idle"
     }
   ],
-  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "web_accessible_resources": [
     {
       "resources": ["assets/turtle/frames/*/*.png"],
