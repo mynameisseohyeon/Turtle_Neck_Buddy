@@ -80,6 +80,7 @@ const OVERLAY_COPY: Record<
     languageLabel: string;
     sizeLabel: string;
     backLabel: string;
+    closeLabel: string;
     left: string;
     right: string;
     minutes: string;
@@ -95,6 +96,7 @@ const OVERLAY_COPY: Record<
     languageLabel: "Language",
     sizeLabel: "Turtle size",
     backLabel: "Back",
+    closeLabel: "Close",
     left: "Left",
     right: "Right",
     minutes: "min"
@@ -109,6 +111,7 @@ const OVERLAY_COPY: Record<
     languageLabel: "언어",
     sizeLabel: "거북이 크기",
     backLabel: "뒤로",
+    closeLabel: "닫기",
     left: "왼쪽",
     right: "오른쪽",
     minutes: "분"
@@ -123,6 +126,7 @@ const OVERLAY_COPY: Record<
     languageLabel: "言語",
     sizeLabel: "カメの大きさ",
     backLabel: "戻る",
+    closeLabel: "閉じる",
     left: "左",
     right: "右",
     minutes: "分"
@@ -137,6 +141,7 @@ const OVERLAY_COPY: Record<
     languageLabel: "语言",
     sizeLabel: "乌龟大小",
     backLabel: "返回",
+    closeLabel: "关闭",
     left: "左",
     right: "右",
     minutes: "分钟"
@@ -151,6 +156,7 @@ const OVERLAY_COPY: Record<
     languageLabel: "Idioma",
     sizeLabel: "Tamaño",
     backLabel: "Atrás",
+    closeLabel: "Cerrar",
     left: "Izq.",
     right: "Der.",
     minutes: "min"
@@ -165,8 +171,10 @@ let reactionTimerId: number | undefined;
 let ambientFrameIndex = 0;
 let isReacting = false;
 let isDragging = false;
+let hasDragged = false;
 let didJustDrag = false;
 let dragOffset = { x: 0, y: 0 };
+let dragStart = { x: 0, y: 0 };
 let nextNeckReactionAt = 0;
 let overlayStopped = false;
 
@@ -340,6 +348,11 @@ function openPreferencesBubble() {
   renderOverlay();
 }
 
+function closeSettingsBubble() {
+  bubbleMode = "reminder";
+  renderOverlay();
+}
+
 function startAmbientAnimation(mascot: HTMLImageElement) {
   if (overlayStopped) {
     return;
@@ -476,9 +489,14 @@ function renderOverlay() {
 
     const hostRect = host.getBoundingClientRect();
     isDragging = true;
+    hasDragged = false;
     dragOffset = {
       x: event.clientX - hostRect.left,
       y: event.clientY - hostRect.top
+    };
+    dragStart = {
+      x: event.clientX,
+      y: event.clientY
     };
     mascotStage.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -488,6 +506,12 @@ function renderOverlay() {
       return;
     }
 
+    const dragDistance = Math.hypot(event.clientX - dragStart.x, event.clientY - dragStart.y);
+    if (dragDistance < 4 && !hasDragged) {
+      return;
+    }
+
+    hasDragged = true;
     const x = Math.min(window.innerWidth - 24, Math.max(24, event.clientX - dragOffset.x));
     const y = Math.min(window.innerHeight - 24, Math.max(24, event.clientY - dragOffset.y));
     host.dataset.customPosition = "true";
@@ -502,8 +526,14 @@ function renderOverlay() {
     }
 
     isDragging = false;
-    didJustDrag = true;
     mascotStage.releasePointerCapture(event.pointerId);
+
+    if (!hasDragged) {
+      openSettingsBubble();
+      return;
+    }
+
+    didJustDrag = true;
     void saveCustomPositionFromPointer(event.clientX - dragOffset.x, event.clientY - dragOffset.y);
     window.setTimeout(() => {
       didJustDrag = false;
@@ -580,9 +610,7 @@ function createSettingsBubbleContent() {
   const settings = document.createElement("div");
   settings.className = "turtle-overlay-settings";
 
-  const title = document.createElement("strong");
-  title.className = "turtle-overlay-settings-title";
-  title.textContent = copy.settingsTitle;
+  const header = createSettingsHeader(copy.settingsTitle, copy.closeLabel);
 
   const enabledLabel = document.createElement("span");
   enabledLabel.className = "turtle-overlay-settings-label";
@@ -673,7 +701,7 @@ function createSettingsBubbleContent() {
   });
 
   settings.append(
-    title,
+    header,
     enabledLabel,
     enabledButton,
     positionLabel,
@@ -691,9 +719,7 @@ function createPreferencesBubbleContent() {
   const preferences = document.createElement("div");
   preferences.className = "turtle-overlay-settings turtle-overlay-preferences";
 
-  const title = document.createElement("strong");
-  title.className = "turtle-overlay-settings-title";
-  title.textContent = copy.preferencesLabel;
+  const header = createSettingsHeader(copy.preferencesLabel, copy.closeLabel);
 
   const languageLabel = document.createElement("span");
   languageLabel.className = "turtle-overlay-settings-label";
@@ -767,9 +793,33 @@ function createPreferencesBubbleContent() {
     openSettingsBubble();
   });
 
-  preferences.append(title, languageLabel, languageGroup, sizeLabel, sizeControl, backButton);
+  preferences.append(header, languageLabel, languageGroup, sizeLabel, sizeControl, backButton);
 
   return preferences;
+}
+
+function createSettingsHeader(titleText: string, closeLabel: string) {
+  const header = document.createElement("div");
+  header.className = "turtle-overlay-settings-header";
+
+  const title = document.createElement("strong");
+  title.className = "turtle-overlay-settings-title";
+  title.textContent = titleText;
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "turtle-overlay-close-button";
+  closeButton.textContent = "×";
+  closeButton.setAttribute("aria-label", closeLabel);
+  closeButton.title = closeLabel;
+  closeButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeSettingsBubble();
+  });
+
+  header.append(title, closeButton);
+
+  return header;
 }
 
 try {

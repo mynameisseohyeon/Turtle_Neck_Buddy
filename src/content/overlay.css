@@ -124,8 +124,15 @@
   align-items: center;
 }
 
-.turtle-overlay-settings-title {
+.turtle-overlay-settings-header {
   grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.turtle-overlay-settings-title {
   font-size: 12px;
   line-height: 1.2;
 }
@@ -139,7 +146,8 @@
 .turtle-overlay-segment-button,
 .turtle-overlay-stepper-button,
 .turtle-overlay-preferences-button,
-.turtle-overlay-flag-button {
+.turtle-overlay-flag-button,
+.turtle-overlay-close-button {
   min-height: 24px;
   border: 2px solid #213329;
   background: #fffdf7;
@@ -156,6 +164,11 @@
   justify-self: start;
   min-width: 44px;
   box-shadow: 2px 2px 0 #213329;
+}
+
+.turtle-overlay-close-button {
+  width: 24px;
+  padding: 0;
 }
 
 .turtle-overlay-toggle[data-active="true"],
