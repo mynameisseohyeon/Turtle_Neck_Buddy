@@ -20,6 +20,11 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   reminderIntervalMinutes: 50,
   excludedHostnames: []
 };
+const INITIAL_VISIBLE_OVERLAY_STATE: OverlayViewState = {
+  visibilityState: "peeking",
+  turtleState: "idle",
+  message: STRETCH_REMINDER_TEXT
+};
 
 const FRAMES = {
   neckIn: [
@@ -348,4 +353,7 @@ chrome.runtime.onMessage.addListener((message: BackgroundToOverlayMessage) => {
   return undefined;
 });
 
-void loadOverlaySettings().then(renderOverlay);
+void loadOverlaySettings().then(() => {
+  overlayState = INITIAL_VISIBLE_OVERLAY_STATE;
+  renderOverlay();
+});
