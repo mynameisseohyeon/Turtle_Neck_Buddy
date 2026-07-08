@@ -7,12 +7,16 @@ export const MIN_REMINDER_INTERVAL_MINUTES = 10;
 export const MAX_REMINDER_INTERVAL_MINUTES = 180;
 export const REMINDER_INTERVAL_STEP_MINUTES = 10;
 export const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
+export const DEFAULT_TURTLE_SIZE = 50;
+export const MIN_TURTLE_SIZE = 20;
+export const MAX_TURTLE_SIZE = 80;
 
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   overlayEnabled: true,
   overlayPosition: "bottom-right",
   reminderIntervalMinutes: DEFAULT_REMINDER_INTERVAL_MINUTES,
   language: "en",
+  turtleSize: DEFAULT_TURTLE_SIZE,
   customPosition: null,
   lastReminderShownAt: null,
   excludedHostnames: []
@@ -52,6 +56,14 @@ function normalizeCustomPosition(value: unknown): OverlayCustomPosition | null {
   };
 }
 
+function normalizeTurtleSize(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_OVERLAY_SETTINGS.turtleSize;
+  }
+
+  return Math.min(MAX_TURTLE_SIZE, Math.max(MIN_TURTLE_SIZE, Math.round(value)));
+}
+
 export function normalizeOverlaySettings(value: unknown): OverlaySettings {
   if (!value || typeof value !== "object") {
     return DEFAULT_OVERLAY_SETTINGS;
@@ -69,6 +81,7 @@ export function normalizeOverlaySettings(value: unknown): OverlaySettings {
       : DEFAULT_OVERLAY_SETTINGS.overlayPosition,
     reminderIntervalMinutes: normalizeReminderIntervalMinutes(candidate.reminderIntervalMinutes),
     language: isOverlayLanguage(candidate.language) ? candidate.language : DEFAULT_OVERLAY_SETTINGS.language,
+    turtleSize: normalizeTurtleSize(candidate.turtleSize),
     customPosition: normalizeCustomPosition(candidate.customPosition),
     lastReminderShownAt:
       typeof candidate.lastReminderShownAt === "string"

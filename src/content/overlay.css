@@ -220,6 +220,25 @@
   background: #2f6e4f;
 }
 
+.turtle-overlay-size-control {
+  display: grid;
+  grid-template-columns: minmax(84px, 1fr) 24px;
+  gap: 6px;
+  align-items: center;
+}
+
+.turtle-overlay-size-control input {
+  width: 100%;
+  accent-color: #2f6e4f;
+  cursor: pointer;
+}
+
+.turtle-overlay-size-value {
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+}
+
 .turtle-overlay-mascot-stage {
   display: flex;
   align-items: flex-end;

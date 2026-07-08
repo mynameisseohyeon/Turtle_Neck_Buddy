@@ -16,6 +16,11 @@ const NECK_REACTION_COOLDOWN_MS = 2400;
 const MIN_REMINDER_INTERVAL_MINUTES = 10;
 const MAX_REMINDER_INTERVAL_MINUTES = 180;
 const REMINDER_INTERVAL_STEP_MINUTES = 10;
+const DEFAULT_TURTLE_SIZE = 50;
+const MIN_TURTLE_SIZE = 20;
+const MAX_TURTLE_SIZE = 80;
+const BASE_TURTLE_WIDTH_PX = 166;
+const BASE_TURTLE_HEIGHT_PX = 263;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
 const OVERLAY_LANGUAGE_FLAGS: Record<OverlayLanguage, { flag: string; label: string }> = {
   en: { flag: "🇺🇸", label: "English" },
@@ -29,6 +34,7 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   overlayPosition: "bottom-right",
   reminderIntervalMinutes: 30,
   language: "en",
+  turtleSize: DEFAULT_TURTLE_SIZE,
   customPosition: null,
   lastReminderShownAt: null,
   excludedHostnames: []
@@ -72,6 +78,7 @@ const OVERLAY_COPY: Record<
     intervalLabel: string;
     preferencesLabel: string;
     languageLabel: string;
+    sizeLabel: string;
     backLabel: string;
     left: string;
     right: string;
@@ -86,6 +93,7 @@ const OVERLAY_COPY: Record<
     intervalLabel: "Every",
     preferencesLabel: "Prefs",
     languageLabel: "Language",
+    sizeLabel: "Turtle size",
     backLabel: "Back",
     left: "Left",
     right: "Right",
@@ -99,6 +107,7 @@ const OVERLAY_COPY: Record<
     intervalLabel: "주기",
     preferencesLabel: "환경 설정",
     languageLabel: "언어",
+    sizeLabel: "거북이 크기",
     backLabel: "뒤로",
     left: "왼쪽",
     right: "오른쪽",
@@ -112,6 +121,7 @@ const OVERLAY_COPY: Record<
     intervalLabel: "間隔",
     preferencesLabel: "環境設定",
     languageLabel: "言語",
+    sizeLabel: "カメの大きさ",
     backLabel: "戻る",
     left: "左",
     right: "右",
@@ -125,6 +135,7 @@ const OVERLAY_COPY: Record<
     intervalLabel: "间隔",
     preferencesLabel: "偏好设置",
     languageLabel: "语言",
+    sizeLabel: "乌龟大小",
     backLabel: "返回",
     left: "左",
     right: "右",
@@ -138,6 +149,7 @@ const OVERLAY_COPY: Record<
     intervalLabel: "Cada",
     preferencesLabel: "Preferencias",
     languageLabel: "Idioma",
+    sizeLabel: "Tamaño",
     backLabel: "Atrás",
     left: "Izq.",
     right: "Der.",
@@ -178,6 +190,7 @@ function normalizeOverlaySettings(value: unknown): OverlaySettings {
     overlayPosition,
     reminderIntervalMinutes,
     language: isOverlayLanguage(candidate.language) ? candidate.language : DEFAULT_OVERLAY_SETTINGS.language,
+    turtleSize: normalizeTurtleSize(candidate.turtleSize),
     customPosition: normalizeCustomPosition(candidate.customPosition),
     lastReminderShownAt:
       typeof candidate.lastReminderShownAt === "string"
@@ -217,6 +230,20 @@ function normalizeCustomPosition(value: unknown) {
     xPercent: Math.min(95, Math.max(5, candidate.xPercent)),
     yPercent: Math.min(95, Math.max(5, candidate.yPercent))
   };
+}
+
+function normalizeTurtleSize(value: unknown) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_OVERLAY_SETTINGS.turtleSize;
+  }
+
+  return Math.min(MAX_TURTLE_SIZE, Math.max(MIN_TURTLE_SIZE, Math.round(value)));
+}
+
+function applyTurtleSizeStyle(mascot: HTMLImageElement, turtleSize = overlaySettings.turtleSize) {
+  const turtleSizeScale = 0.7 + (turtleSize - MIN_TURTLE_SIZE) / 100;
+  mascot.style.maxWidth = `${Math.round(BASE_TURTLE_WIDTH_PX * turtleSizeScale)}px`;
+  mascot.style.maxHeight = `${Math.round(BASE_TURTLE_HEIGHT_PX * turtleSizeScale)}px`;
 }
 
 function getOverlayCopy() {
@@ -437,6 +464,7 @@ function renderOverlay() {
   mascot.className = "turtle-overlay-mascot";
   mascot.alt = "";
   mascot.draggable = false;
+  applyTurtleSizeStyle(mascot);
 
   const mascotStage = document.createElement("div");
   mascotStage.className = "turtle-overlay-mascot-stage";
@@ -692,6 +720,44 @@ function createPreferencesBubbleContent() {
     languageGroup.append(button);
   });
 
+  const sizeLabel = document.createElement("span");
+  sizeLabel.className = "turtle-overlay-settings-label";
+  sizeLabel.textContent = copy.sizeLabel;
+
+  const sizeControl = document.createElement("label");
+  sizeControl.className = "turtle-overlay-size-control";
+  const sizeInput = document.createElement("input");
+  sizeInput.type = "range";
+  sizeInput.min = String(MIN_TURTLE_SIZE);
+  sizeInput.max = String(MAX_TURTLE_SIZE);
+  sizeInput.step = "1";
+  sizeInput.value = String(overlaySettings.turtleSize);
+  const sizeValue = document.createElement("span");
+  sizeValue.className = "turtle-overlay-size-value";
+  sizeValue.textContent = String(overlaySettings.turtleSize);
+  sizeInput.addEventListener("input", (event) => {
+    const nextSize = normalizeTurtleSize(Number((event.currentTarget as HTMLInputElement).value));
+    sizeValue.textContent = String(nextSize);
+    overlaySettings = {
+      ...overlaySettings,
+      turtleSize: nextSize
+    };
+    const currentMascot = document
+      .getElementById(OVERLAY_HOST_ID)
+      ?.shadowRoot?.querySelector<HTMLImageElement>(".turtle-overlay-mascot");
+    if (currentMascot) {
+      applyTurtleSizeStyle(currentMascot, nextSize);
+    }
+  });
+  sizeInput.addEventListener("change", (event) => {
+    const nextSize = normalizeTurtleSize(Number((event.currentTarget as HTMLInputElement).value));
+    void updateOverlaySettings({
+      ...overlaySettings,
+      turtleSize: nextSize
+    });
+  });
+  sizeControl.append(sizeInput, sizeValue);
+
   const backButton = document.createElement("button");
   backButton.type = "button";
   backButton.className = "turtle-overlay-preferences-button";
@@ -701,7 +767,7 @@ function createPreferencesBubbleContent() {
     openSettingsBubble();
   });
 
-  preferences.append(title, languageLabel, languageGroup, backButton);
+  preferences.append(title, languageLabel, languageGroup, sizeLabel, sizeControl, backButton);
 
   return preferences;
 }
