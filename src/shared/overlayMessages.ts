@@ -3,11 +3,14 @@ export type OverlayReminderPayload = {
   triggeredAt: string;
 };
 
-export type OverlayPosition = "bottom-right";
+export type OverlayPosition = "bottom-right" | "bottom-left";
+
+export type ReminderIntervalMinutes = 30 | 50 | 60;
 
 export type OverlaySettings = {
   overlayEnabled: boolean;
   overlayPosition: OverlayPosition;
+  reminderIntervalMinutes: ReminderIntervalMinutes;
   excludedHostnames: string[];
 };
 

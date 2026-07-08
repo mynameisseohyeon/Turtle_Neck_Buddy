@@ -3,6 +3,11 @@ import type {
   CurrentSiteOverlayPermissionState,
   PopupToBackgroundMessage
 } from "../shared/overlayMessages";
+import {
+  DEFAULT_OVERLAY_SETTINGS,
+  normalizeOverlaySettings,
+  OVERLAY_SETTINGS_STORAGE_KEY
+} from "../shared/overlaySettings";
 
 const REMINDER_ALARM_NAME = "turtle-neck-buddy-reminder";
 const OVERLAY_SCRIPT_FILE = "content/overlay.js";
@@ -31,6 +36,32 @@ function getSupportedOrigin(urlString?: string): { hostname: string; originPatte
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
+}
+
+async function getOverlaySettings() {
+  const storedSettings = await chrome.storage.local.get(OVERLAY_SETTINGS_STORAGE_KEY);
+  return normalizeOverlaySettings(storedSettings[OVERLAY_SETTINGS_STORAGE_KEY]);
+}
+
+async function saveDefaultOverlaySettings() {
+  const storedSettings = await chrome.storage.local.get(OVERLAY_SETTINGS_STORAGE_KEY);
+
+  if (storedSettings[OVERLAY_SETTINGS_STORAGE_KEY]) {
+    return getOverlaySettings();
+  }
+
+  await chrome.storage.local.set({
+    [OVERLAY_SETTINGS_STORAGE_KEY]: DEFAULT_OVERLAY_SETTINGS
+  });
+
+  return DEFAULT_OVERLAY_SETTINGS;
+}
+
+function scheduleReminderAlarm(intervalMinutes: number) {
+  void chrome.alarms.create(REMINDER_ALARM_NAME, {
+    delayInMinutes: intervalMinutes,
+    periodInMinutes: intervalMinutes
+  });
 }
 
 async function getCurrentSiteOverlayPermission(): Promise<CurrentSiteOverlayPermissionState> {
@@ -97,9 +128,8 @@ async function showOverlayInActiveTab() {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  void chrome.alarms.create(REMINDER_ALARM_NAME, {
-    delayInMinutes: 50,
-    periodInMinutes: 50
+  void saveDefaultOverlaySettings().then((settings) => {
+    scheduleReminderAlarm(settings.reminderIntervalMinutes);
   });
 });
 
@@ -108,12 +138,30 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     return;
   }
 
-  // Overlay injection is intentionally handled in a later issue after optional host permission UX is in place.
-  void chrome.notifications.create({
-    type: "basic",
-    iconUrl: "icons/icon128.png",
-    title: "Turtle Neck Buddy",
-    message: "목 쉬는 시간이에요. 30초만 스트레칭해요."
+  void getOverlaySettings().then((settings) => {
+    if (!settings.overlayEnabled) {
+      return;
+    }
+
+    void chrome.notifications.create({
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: "Turtle Neck Buddy",
+      message: "목 쉬는 시간이에요. 30초만 스트레칭해요."
+    });
+  });
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || !changes[OVERLAY_SETTINGS_STORAGE_KEY]) {
+    return;
+  }
+
+  const settings = normalizeOverlaySettings(changes[OVERLAY_SETTINGS_STORAGE_KEY].newValue);
+  void chrome.alarms.clear(REMINDER_ALARM_NAME, () => {
+    if (settings.overlayEnabled) {
+      scheduleReminderAlarm(settings.reminderIntervalMinutes);
+    }
   });
 });
 
