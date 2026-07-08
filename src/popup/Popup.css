@@ -86,7 +86,8 @@ button {
 
 .mascot-panel,
 .stretch-card,
-.settings-panel {
+.settings-panel,
+.site-permission-panel {
   margin-top: 14px;
   border: 2px solid #213329;
   border-radius: 8px;
@@ -152,6 +153,44 @@ button {
   font-weight: 800;
   line-height: 1.35;
   text-align: center;
+}
+
+.site-permission-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.site-permission-panel span {
+  color: #526356;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.site-permission-panel strong {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+}
+
+.site-permission-panel p {
+  margin: 6px 0 0;
+  color: #425349;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.site-permission-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.permission-feedback {
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #e4efd8;
+  font-weight: 800;
 }
 
 .stretch-card {

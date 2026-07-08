@@ -1,24 +1,17 @@
 :host {
   all: initial;
   position: fixed;
-  right: 24px;
-  bottom: 24px;
+  right: 0;
+  bottom: 16px;
   z-index: 2147483647;
   pointer-events: none;
 }
 
 .turtle-overlay {
-  width: 220px;
-  color: #213329;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  transform: translateX(68%);
+  display: grid;
+  justify-items: end;
+  width: 190px;
+  transform: translateX(46%);
   transition:
     opacity 180ms ease,
     transform 320ms ease;
@@ -31,7 +24,7 @@
 
 .turtle-overlay[data-state="peeking"] {
   opacity: 1;
-  transform: translateX(62%);
+  transform: translateX(58%);
 }
 
 .turtle-overlay[data-state="alert"],
@@ -41,57 +34,86 @@
   transform: translateX(0);
 }
 
-.turtle-overlay-card {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
+.turtle-overlay-bubble {
+  position: relative;
+  margin: 0 24px -2px 0;
+  padding: 7px 9px;
   border: 2px solid #213329;
-  border-radius: 8px;
   background: #fffdf7;
-  box-shadow: 0 8px 20px rgba(33, 51, 41, 0.18);
+  color: #213329;
+  font-family:
+    ui-monospace,
+    "SFMono-Regular",
+    Menlo,
+    Consolas,
+    monospace;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: nowrap;
+  box-shadow: 2px 2px 0 #213329;
+  animation: turtle-bubble-float 1600ms steps(2, end) infinite;
+}
+
+.turtle-overlay-bubble::after {
+  position: absolute;
+  right: 14px;
+  bottom: -7px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #213329;
+  border-bottom: 2px solid #213329;
+  background: #fffdf7;
+  content: "";
+  transform: rotate(45deg);
+}
+
+.turtle-overlay-mascot-stage {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: 190px;
+  height: 286px;
+  overflow: visible;
   pointer-events: auto;
+  transform-origin: 78% 100%;
+  animation: turtle-gentle-breathe 1800ms steps(3, end) infinite;
 }
 
 .turtle-overlay-mascot {
   display: block;
-  width: 128px;
-  height: 96px;
+  max-width: 180px;
+  max-height: 286px;
+  width: auto;
+  height: auto;
   object-fit: contain;
   image-rendering: pixelated;
-  justify-self: center;
+  user-select: none;
 }
 
-.turtle-overlay-message {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #f4cd67;
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.35;
-  text-align: center;
+@keyframes turtle-gentle-breathe {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+
+  40% {
+    transform: translateY(-2px) rotate(-1deg);
+  }
+
+  70% {
+    transform: translateY(1px) rotate(1deg);
+  }
 }
 
-.turtle-overlay-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
+@keyframes turtle-bubble-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
 
-.turtle-overlay-button {
-  min-height: 34px;
-  border: 2px solid #213329;
-  border-radius: 8px;
-  background: #fffdf7;
-  color: #213329;
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
-.turtle-overlay-button-primary {
-  background: #2f6e4f;
-  color: #ffffff;
+  50% {
+    transform: translateY(-2px);
+  }
 }
