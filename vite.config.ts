@@ -1,8 +1,21 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import manifest from "./manifest.json";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: "emit-extension-manifest",
+      generateBundle: function () {
+        this.emitFile({
+          type: "asset",
+          fileName: "manifest.json",
+          source: JSON.stringify(manifest, null, 2)
+        });
+      }
+    }
+  ],
   build: {
     rollupOptions: {
       input: {

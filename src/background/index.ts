@@ -3,9 +3,23 @@ import type {
   CurrentSiteOverlayPermissionState,
   PopupToBackgroundMessage
 } from "../shared/overlayMessages";
+import {
+  DEFAULT_OVERLAY_SETTINGS,
+  normalizeOverlaySettings,
+  OVERLAY_SETTINGS_STORAGE_KEY
+} from "../shared/overlaySettings";
 
 const REMINDER_ALARM_NAME = "turtle-neck-buddy-reminder";
 const OVERLAY_SCRIPT_FILE = "content/overlay.js";
+
+function showExtensionNotice(message: string) {
+  void chrome.notifications.create({
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "Turtle Neck Buddy",
+    message
+  });
+}
 
 function getSupportedOrigin(urlString?: string): { hostname: string; originPattern: string } | null {
   if (!urlString) {
@@ -31,6 +45,32 @@ function getSupportedOrigin(urlString?: string): { hostname: string; originPatte
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
+}
+
+async function getOverlaySettings() {
+  const storedSettings = await chrome.storage.local.get(OVERLAY_SETTINGS_STORAGE_KEY);
+  return normalizeOverlaySettings(storedSettings[OVERLAY_SETTINGS_STORAGE_KEY]);
+}
+
+async function saveDefaultOverlaySettings() {
+  const storedSettings = await chrome.storage.local.get(OVERLAY_SETTINGS_STORAGE_KEY);
+
+  if (storedSettings[OVERLAY_SETTINGS_STORAGE_KEY]) {
+    return getOverlaySettings();
+  }
+
+  await chrome.storage.local.set({
+    [OVERLAY_SETTINGS_STORAGE_KEY]: DEFAULT_OVERLAY_SETTINGS
+  });
+
+  return DEFAULT_OVERLAY_SETTINGS;
+}
+
+function scheduleReminderAlarm(intervalMinutes: number) {
+  void chrome.alarms.create(REMINDER_ALARM_NAME, {
+    delayInMinutes: intervalMinutes,
+    periodInMinutes: intervalMinutes
+  });
 }
 
 async function getCurrentSiteOverlayPermission(): Promise<CurrentSiteOverlayPermissionState> {
@@ -96,11 +136,45 @@ async function showOverlayInActiveTab() {
   }
 }
 
+async function showOverlayFromActionClick(tab: chrome.tabs.Tab) {
+  const supportedOrigin = getSupportedOrigin(tab.url);
+
+  if (!tab.id || !supportedOrigin) {
+    showExtensionNotice("이 페이지에는 거북이를 띄울 수 없어요. http 또는 https 페이지에서 다시 눌러주세요.");
+    return;
+  }
+
+  const message: BackgroundToOverlayMessage = {
+    type: "SHOW_STRETCH_REMINDER",
+    payload: {
+      reminderId: `action-${Date.now()}`,
+      triggeredAt: new Date().toISOString()
+    }
+  };
+
+  try {
+    await chrome.tabs.sendMessage(tab.id, message);
+  } catch {
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: [OVERLAY_SCRIPT_FILE]
+      });
+      await chrome.tabs.sendMessage(tab.id, message);
+    } catch {
+      showExtensionNotice("현재 페이지에 거북이를 띄우지 못했어요. 페이지를 새로고침한 뒤 다시 눌러주세요.");
+    }
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
-  void chrome.alarms.create(REMINDER_ALARM_NAME, {
-    delayInMinutes: 50,
-    periodInMinutes: 50
+  void saveDefaultOverlaySettings().then((settings) => {
+    scheduleReminderAlarm(settings.reminderIntervalMinutes);
   });
+});
+
+chrome.action.onClicked.addListener((tab) => {
+  void showOverlayFromActionClick(tab);
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -108,12 +182,25 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     return;
   }
 
-  // Overlay injection is intentionally handled in a later issue after optional host permission UX is in place.
-  void chrome.notifications.create({
-    type: "basic",
-    iconUrl: "icons/icon128.png",
-    title: "Turtle Neck Buddy",
-    message: "목 쉬는 시간이에요. 30초만 스트레칭해요."
+  void getOverlaySettings().then((settings) => {
+    if (!settings.overlayEnabled) {
+      return;
+    }
+
+    showExtensionNotice("목 쉬는 시간이에요. 30초만 스트레칭해요.");
+  });
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local" || !changes[OVERLAY_SETTINGS_STORAGE_KEY]) {
+    return;
+  }
+
+  const settings = normalizeOverlaySettings(changes[OVERLAY_SETTINGS_STORAGE_KEY].newValue);
+  void chrome.alarms.clear(REMINDER_ALARM_NAME, () => {
+    if (settings.overlayEnabled) {
+      scheduleReminderAlarm(settings.reminderIntervalMinutes);
+    }
   });
 });
 

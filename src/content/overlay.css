@@ -2,29 +2,48 @@
   all: initial;
   position: fixed;
   right: 0;
+  left: auto;
   bottom: 16px;
   z-index: 2147483647;
   pointer-events: none;
+}
+
+:host([data-position="bottom-left"]) {
+  right: auto;
+  left: 0;
 }
 
 .turtle-overlay {
   display: grid;
   justify-items: end;
   width: 190px;
-  transform: translateX(46%);
+  transform: translateX(54%);
   transition:
     opacity 180ms ease,
-    transform 320ms ease;
+    transform 520ms cubic-bezier(0.2, 0.9, 0.24, 1);
+}
+
+:host([data-position="bottom-left"]) .turtle-overlay {
+  justify-items: start;
+  transform: translateX(-54%);
 }
 
 .turtle-overlay[data-state="hidden"] {
   opacity: 0;
-  transform: translateX(110%);
+  transform: translateX(118%);
+}
+
+:host([data-position="bottom-left"]) .turtle-overlay[data-state="hidden"] {
+  transform: translateX(-118%);
 }
 
 .turtle-overlay[data-state="peeking"] {
   opacity: 1;
-  transform: translateX(58%);
+  transform: translateX(18%);
+}
+
+:host([data-position="bottom-left"]) .turtle-overlay[data-state="peeking"] {
+  transform: translateX(-18%);
 }
 
 .turtle-overlay[data-state="alert"],
@@ -53,7 +72,17 @@
   letter-spacing: 0;
   white-space: nowrap;
   box-shadow: 2px 2px 0 #213329;
+  pointer-events: auto;
   animation: turtle-bubble-float 1600ms steps(2, end) infinite;
+}
+
+:host([data-position="bottom-left"]) .turtle-overlay-bubble {
+  margin: 0 0 -2px 24px;
+}
+
+.turtle-overlay-bubble[data-mode="settings"] {
+  min-width: 154px;
+  white-space: normal;
 }
 
 .turtle-overlay-bubble::after {
@@ -69,6 +98,64 @@
   transform: rotate(45deg);
 }
 
+:host([data-position="bottom-left"]) .turtle-overlay-bubble::after {
+  right: auto;
+  left: 14px;
+}
+
+.turtle-overlay-settings {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px 8px;
+  align-items: center;
+}
+
+.turtle-overlay-settings-title {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.turtle-overlay-settings-label {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.turtle-overlay-toggle,
+.turtle-overlay-segment-button {
+  min-height: 24px;
+  border: 2px solid #213329;
+  background: #fffdf7;
+  color: #213329;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.turtle-overlay-toggle {
+  justify-self: start;
+  min-width: 44px;
+  box-shadow: 2px 2px 0 #213329;
+}
+
+.turtle-overlay-toggle[data-active="true"],
+.turtle-overlay-segment-button[data-active="true"] {
+  background: #2f6e4f;
+  color: #fffdf7;
+}
+
+.turtle-overlay-segment {
+  display: flex;
+  gap: 4px;
+}
+
+.turtle-overlay-segment-button {
+  padding: 0 6px;
+}
+
 .turtle-overlay-mascot-stage {
   display: flex;
   align-items: flex-end;
@@ -81,6 +168,11 @@
   animation: turtle-gentle-breathe 1800ms steps(3, end) infinite;
 }
 
+:host([data-position="bottom-left"]) .turtle-overlay-mascot-stage {
+  justify-content: flex-start;
+  transform-origin: 22% 100%;
+}
+
 .turtle-overlay-mascot {
   display: block;
   max-width: 180px;
@@ -90,6 +182,10 @@
   object-fit: contain;
   image-rendering: pixelated;
   user-select: none;
+}
+
+:host([data-position="bottom-left"]) .turtle-overlay-mascot {
+  transform: scaleX(-1);
 }
 
 @keyframes turtle-gentle-breathe {
