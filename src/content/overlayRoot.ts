@@ -284,6 +284,11 @@ async function saveCustomPositionFromPointer(clientX: number, clientY: number) {
   });
 }
 
+function toggleSettingsBubble() {
+  bubbleMode = bubbleMode === "settings" ? "reminder" : "settings";
+  renderOverlay();
+}
+
 function startAmbientAnimation(mascot: HTMLImageElement) {
   if (overlayStopped) {
     return;
@@ -457,8 +462,7 @@ function renderOverlay() {
       return;
     }
 
-    bubbleMode = bubbleMode === "settings" ? "reminder" : "settings";
-    renderOverlay();
+    toggleSettingsBubble();
   });
 
   const bubble = document.createElement("div");
@@ -469,6 +473,10 @@ function renderOverlay() {
     bubble.append(createSettingsBubbleContent());
   } else {
     bubble.textContent = overlayState.message || getOverlayCopy().reminder;
+    bubble.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleSettingsBubble();
+    });
   }
 
   mascotStage.append(mascot);
