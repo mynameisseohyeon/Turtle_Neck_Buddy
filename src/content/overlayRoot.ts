@@ -8,7 +8,7 @@ import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/ove
 
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
 const OVERLAY_SETTINGS_STORAGE_KEY = "turtle-neck-buddy-overlay-settings";
-const STRETCH_REMINDER_TEXT = "Time to stretch.";
+const STRETCH_REMINDER_TEXT = "Time to stretch!";
 const IDLE_FRAME_INTERVAL_MS = 620;
 const ALERT_FRAME_INTERVAL_MS = 90;
 const REACTION_FRAME_INTERVAL_MS = 70;
@@ -70,7 +70,7 @@ const OVERLAY_COPY: Record<
   }
 > = {
   en: {
-    reminder: "Time to stretch.",
+    reminder: "Time to stretch!",
     settingsTitle: "Stretch settings",
     enabledLabel: "Alert",
     positionLabel: "Side",
@@ -81,7 +81,7 @@ const OVERLAY_COPY: Record<
     minutes: "min"
   },
   ko: {
-    reminder: "스트레칭 시간이야.",
+    reminder: "스트레칭 시간이야!",
     settingsTitle: "스트레칭 설정",
     enabledLabel: "알림",
     positionLabel: "위치",
@@ -92,7 +92,7 @@ const OVERLAY_COPY: Record<
     minutes: "분"
   },
   ja: {
-    reminder: "ストレッチの時間だよ。",
+    reminder: "ストレッチの時間だよ！",
     settingsTitle: "ストレッチ設定",
     enabledLabel: "通知",
     positionLabel: "位置",
@@ -103,7 +103,7 @@ const OVERLAY_COPY: Record<
     minutes: "分"
   },
   zh: {
-    reminder: "该伸展一下了。",
+    reminder: "该伸展一下了！",
     settingsTitle: "伸展设置",
     enabledLabel: "提醒",
     positionLabel: "位置",
@@ -114,7 +114,7 @@ const OVERLAY_COPY: Record<
     minutes: "分钟"
   },
   es: {
-    reminder: "Hora de estirarte.",
+    reminder: "Hora de estirarte!",
     settingsTitle: "Ajustes",
     enabledLabel: "Aviso",
     positionLabel: "Lado",
@@ -137,6 +137,7 @@ let isDragging = false;
 let didJustDrag = false;
 let dragOffset = { x: 0, y: 0 };
 let nextNeckReactionAt = 0;
+let overlayStopped = false;
 
 function normalizeOverlaySettings(value: unknown): OverlaySettings {
   if (!value || typeof value !== "object") {
@@ -204,11 +205,23 @@ function getOverlayCopy() {
 }
 
 function getRuntimeAssetUrl(path: string) {
-  return chrome.runtime.getURL(path);
+  try {
+    return chrome.runtime.getURL(path);
+  } catch {
+    stopOverlayAfterContextInvalidated();
+    return null;
+  }
 }
 
 function setMascotFrame(mascot: HTMLImageElement, framePath: string) {
-  mascot.src = getRuntimeAssetUrl(framePath);
+  const frameUrl = getRuntimeAssetUrl(framePath);
+
+  if (!frameUrl) {
+    return false;
+  }
+
+  mascot.src = frameUrl;
+  return true;
 }
 
 function clearAmbientAnimation() {
@@ -229,16 +242,36 @@ function clearReactionAnimation() {
   reactionTimerId = undefined;
 }
 
+function stopOverlayAfterContextInvalidated() {
+  overlayStopped = true;
+  clearReactionAnimation();
+  clearAmbientAnimation();
+  document.getElementById(OVERLAY_HOST_ID)?.remove();
+}
+
 async function loadOverlaySettings() {
-  const storedSettings = await chrome.storage.local.get(OVERLAY_SETTINGS_STORAGE_KEY);
-  overlaySettings = normalizeOverlaySettings(storedSettings[OVERLAY_SETTINGS_STORAGE_KEY]);
+  try {
+    const storedSettings = await chrome.storage.local.get(OVERLAY_SETTINGS_STORAGE_KEY);
+    overlaySettings = normalizeOverlaySettings(storedSettings[OVERLAY_SETTINGS_STORAGE_KEY]);
+  } catch {
+    stopOverlayAfterContextInvalidated();
+  }
 }
 
 async function updateOverlaySettings(nextSettings: OverlaySettings) {
+  if (overlayStopped) {
+    return;
+  }
+
   overlaySettings = nextSettings;
-  await chrome.storage.local.set({
-    [OVERLAY_SETTINGS_STORAGE_KEY]: nextSettings
-  });
+  try {
+    await chrome.storage.local.set({
+      [OVERLAY_SETTINGS_STORAGE_KEY]: nextSettings
+    });
+  } catch {
+    stopOverlayAfterContextInvalidated();
+    return;
+  }
   renderOverlay();
 }
 
@@ -252,12 +285,18 @@ async function saveCustomPositionFromPointer(clientX: number, clientY: number) {
 }
 
 function startAmbientAnimation(mascot: HTMLImageElement) {
+  if (overlayStopped) {
+    return;
+  }
+
   clearAmbientAnimation();
 
   const frames = overlayState.visibilityState === "alert" ? FRAMES.neckOut : FRAMES.neckIn;
   const interval = overlayState.visibilityState === "alert" ? ALERT_FRAME_INTERVAL_MS : IDLE_FRAME_INTERVAL_MS;
   ambientFrameIndex = 0;
-  setMascotFrame(mascot, frames[ambientFrameIndex]);
+  if (!setMascotFrame(mascot, frames[ambientFrameIndex])) {
+    return;
+  }
 
   ambientTimerId = window.setInterval(() => {
     if (isReacting) {
@@ -269,11 +308,18 @@ function startAmbientAnimation(mascot: HTMLImageElement) {
     }
 
     ambientFrameIndex = (ambientFrameIndex + 1) % frames.length;
-    setMascotFrame(mascot, frames[ambientFrameIndex]);
+    if (!setMascotFrame(mascot, frames[ambientFrameIndex])) {
+      clearAmbientAnimation();
+      return;
+    }
   }, interval);
 }
 
 function playNeckReaction(mascot: HTMLImageElement) {
+  if (overlayStopped) {
+    return;
+  }
+
   const now = Date.now();
 
   if (isDragging || isReacting || now < nextNeckReactionAt || overlayState.visibilityState === "hidden") {
@@ -285,7 +331,10 @@ function playNeckReaction(mascot: HTMLImageElement) {
   isReacting = true;
   nextNeckReactionAt = now + NECK_REACTION_COOLDOWN_MS;
   clearReactionAnimation();
-  setMascotFrame(mascot, reactionFrames[reactionFrameIndex]);
+  if (!setMascotFrame(mascot, reactionFrames[reactionFrameIndex])) {
+    isReacting = false;
+    return;
+  }
 
   reactionTimerId = window.setInterval(() => {
     reactionFrameIndex += 1;
@@ -297,7 +346,11 @@ function playNeckReaction(mascot: HTMLImageElement) {
       return;
     }
 
-    setMascotFrame(mascot, reactionFrames[reactionFrameIndex]);
+    if (!setMascotFrame(mascot, reactionFrames[reactionFrameIndex])) {
+      clearReactionAnimation();
+      isReacting = false;
+      return;
+    }
   }, REACTION_FRAME_INTERVAL_MS);
 }
 
@@ -320,6 +373,10 @@ function createOverlayHost() {
 }
 
 function renderOverlay() {
+  if (overlayStopped) {
+    return;
+  }
+
   const shadowRoot = createOverlayHost();
   const currentState = overlayState.visibilityState;
   const host = shadowRoot.host as HTMLElement;
@@ -427,6 +484,10 @@ function renderOverlay() {
 }
 
 function showReminder() {
+  if (overlayStopped) {
+    return;
+  }
+
   overlayState = {
     visibilityState: "alert",
     turtleState: "idle",
@@ -436,6 +497,10 @@ function showReminder() {
 }
 
 function hideOverlay() {
+  if (overlayStopped) {
+    return;
+  }
+
   clearReactionAnimation();
   clearAmbientAnimation();
   isReacting = false;
@@ -572,19 +637,27 @@ function createSettingsBubbleContent() {
   return settings;
 }
 
-chrome.runtime.onMessage.addListener((message: BackgroundToOverlayMessage) => {
-  if (message.type === "SHOW_STRETCH_REMINDER") {
-    showReminder();
-  }
+try {
+  chrome.runtime.onMessage.addListener((message: BackgroundToOverlayMessage) => {
+    if (message.type === "SHOW_STRETCH_REMINDER") {
+      showReminder();
+    }
 
-  if (message.type === "HIDE_STRETCH_REMINDER") {
-    hideOverlay();
-  }
+    if (message.type === "HIDE_STRETCH_REMINDER") {
+      hideOverlay();
+    }
 
-  return undefined;
-});
+    return undefined;
+  });
+} catch {
+  stopOverlayAfterContextInvalidated();
+}
 
 void loadOverlaySettings().then(() => {
+  if (overlayStopped) {
+    return;
+  }
+
   overlayState = INITIAL_VISIBLE_OVERLAY_STATE;
   renderOverlay();
 });
