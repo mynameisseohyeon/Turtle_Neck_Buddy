@@ -12,6 +12,15 @@ import {
 const REMINDER_ALARM_NAME = "turtle-neck-buddy-reminder";
 const OVERLAY_SCRIPT_FILE = "content/overlay.js";
 
+function showExtensionNotice(message: string) {
+  void chrome.notifications.create({
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "Turtle Neck Buddy",
+    message
+  });
+}
+
 function getSupportedOrigin(urlString?: string): { hostname: string; originPattern: string } | null {
   if (!urlString) {
     return null;
@@ -131,6 +140,7 @@ async function showOverlayFromActionClick(tab: chrome.tabs.Tab) {
   const supportedOrigin = getSupportedOrigin(tab.url);
 
   if (!tab.id || !supportedOrigin) {
+    showExtensionNotice("이 페이지에는 거북이를 띄울 수 없어요. http 또는 https 페이지에서 다시 눌러주세요.");
     return;
   }
 
@@ -145,11 +155,15 @@ async function showOverlayFromActionClick(tab: chrome.tabs.Tab) {
   try {
     await chrome.tabs.sendMessage(tab.id, message);
   } catch {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: [OVERLAY_SCRIPT_FILE]
-    });
-    await chrome.tabs.sendMessage(tab.id, message);
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: [OVERLAY_SCRIPT_FILE]
+      });
+      await chrome.tabs.sendMessage(tab.id, message);
+    } catch {
+      showExtensionNotice("현재 페이지에 거북이를 띄우지 못했어요. 페이지를 새로고침한 뒤 다시 눌러주세요.");
+    }
   }
 }
 
@@ -173,12 +187,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       return;
     }
 
-    void chrome.notifications.create({
-      type: "basic",
-      iconUrl: "icons/icon128.png",
-      title: "Turtle Neck Buddy",
-      message: "목 쉬는 시간이에요. 30초만 스트레칭해요."
-    });
+    showExtensionNotice("목 쉬는 시간이에요. 30초만 스트레칭해요.");
   });
 });
 

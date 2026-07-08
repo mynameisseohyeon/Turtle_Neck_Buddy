@@ -240,7 +240,7 @@ function renderOverlay() {
 
 function showReminder() {
   overlayState = {
-    visibilityState: overlaySettings.overlayEnabled ? "alert" : "hidden",
+    visibilityState: "alert",
     turtleState: "idle",
     message: STRETCH_REMINDER_TEXT
   };
