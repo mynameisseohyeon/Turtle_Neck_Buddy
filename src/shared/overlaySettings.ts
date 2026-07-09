@@ -10,6 +10,7 @@ export const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "z
 export const DEFAULT_TURTLE_SIZE = 50;
 export const MIN_TURTLE_SIZE = 20;
 export const MAX_TURTLE_SIZE = 80;
+export const TURTLE_SIZE_SCALE_VERSION = 2;
 
 export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   overlayEnabled: true,
@@ -17,6 +18,7 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   reminderIntervalMinutes: DEFAULT_REMINDER_INTERVAL_MINUTES,
   language: "en",
   turtleSize: DEFAULT_TURTLE_SIZE,
+  turtleSizeScaleVersion: TURTLE_SIZE_SCALE_VERSION,
   customPosition: null,
   lastReminderShownAt: null,
   excludedHostnames: []
@@ -56,12 +58,13 @@ function normalizeCustomPosition(value: unknown): OverlayCustomPosition | null {
   };
 }
 
-function normalizeTurtleSize(value: unknown) {
+function normalizeTurtleSize(value: unknown, version: unknown) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return DEFAULT_OVERLAY_SETTINGS.turtleSize;
   }
 
-  return Math.min(MAX_TURTLE_SIZE, Math.max(MIN_TURTLE_SIZE, Math.round(value)));
+  const migratedValue = version === TURTLE_SIZE_SCALE_VERSION ? value : value + 30;
+  return Math.min(MAX_TURTLE_SIZE, Math.max(MIN_TURTLE_SIZE, Math.round(migratedValue)));
 }
 
 export function normalizeOverlaySettings(value: unknown): OverlaySettings {
@@ -81,7 +84,8 @@ export function normalizeOverlaySettings(value: unknown): OverlaySettings {
       : DEFAULT_OVERLAY_SETTINGS.overlayPosition,
     reminderIntervalMinutes: normalizeReminderIntervalMinutes(candidate.reminderIntervalMinutes),
     language: isOverlayLanguage(candidate.language) ? candidate.language : DEFAULT_OVERLAY_SETTINGS.language,
-    turtleSize: normalizeTurtleSize(candidate.turtleSize),
+    turtleSize: normalizeTurtleSize(candidate.turtleSize, candidate.turtleSizeScaleVersion),
+    turtleSizeScaleVersion: TURTLE_SIZE_SCALE_VERSION,
     customPosition: normalizeCustomPosition(candidate.customPosition),
     lastReminderShownAt:
       typeof candidate.lastReminderShownAt === "string"

@@ -19,6 +19,7 @@ const REMINDER_INTERVAL_STEP_MINUTES = 10;
 const DEFAULT_TURTLE_SIZE = 50;
 const MIN_TURTLE_SIZE = 20;
 const MAX_TURTLE_SIZE = 80;
+const TURTLE_SIZE_SCALE_VERSION = 2;
 const BASE_TURTLE_WIDTH_PX = 166;
 const BASE_TURTLE_HEIGHT_PX = 263;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
@@ -35,6 +36,7 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   reminderIntervalMinutes: 30,
   language: "en",
   turtleSize: DEFAULT_TURTLE_SIZE,
+  turtleSizeScaleVersion: TURTLE_SIZE_SCALE_VERSION,
   customPosition: null,
   lastReminderShownAt: null,
   excludedHostnames: []
@@ -198,7 +200,8 @@ function normalizeOverlaySettings(value: unknown): OverlaySettings {
     overlayPosition,
     reminderIntervalMinutes,
     language: isOverlayLanguage(candidate.language) ? candidate.language : DEFAULT_OVERLAY_SETTINGS.language,
-    turtleSize: normalizeTurtleSize(candidate.turtleSize),
+    turtleSize: normalizeTurtleSize(candidate.turtleSize, candidate.turtleSizeScaleVersion),
+    turtleSizeScaleVersion: TURTLE_SIZE_SCALE_VERSION,
     customPosition: normalizeCustomPosition(candidate.customPosition),
     lastReminderShownAt:
       typeof candidate.lastReminderShownAt === "string"
@@ -240,16 +243,17 @@ function normalizeCustomPosition(value: unknown) {
   };
 }
 
-function normalizeTurtleSize(value: unknown) {
+function normalizeTurtleSize(value: unknown, version: unknown = TURTLE_SIZE_SCALE_VERSION) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return DEFAULT_OVERLAY_SETTINGS.turtleSize;
   }
 
-  return Math.min(MAX_TURTLE_SIZE, Math.max(MIN_TURTLE_SIZE, Math.round(value)));
+  const migratedValue = version === TURTLE_SIZE_SCALE_VERSION ? value : value + 30;
+  return Math.min(MAX_TURTLE_SIZE, Math.max(MIN_TURTLE_SIZE, Math.round(migratedValue)));
 }
 
 function applyTurtleSizeStyle(mascot: HTMLImageElement, turtleSize = overlaySettings.turtleSize) {
-  const turtleSizeScale = 0.7 + (turtleSize - MIN_TURTLE_SIZE) / 100;
+  const turtleSizeScale = 0.7 + (turtleSize - DEFAULT_TURTLE_SIZE) / 100;
   mascot.style.maxWidth = `${Math.round(BASE_TURTLE_WIDTH_PX * turtleSizeScale)}px`;
   mascot.style.maxHeight = `${Math.round(BASE_TURTLE_HEIGHT_PX * turtleSizeScale)}px`;
 }

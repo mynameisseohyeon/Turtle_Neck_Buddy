@@ -18,6 +18,7 @@ export type OverlaySettings = {
   reminderIntervalMinutes: number;
   language: OverlayLanguage;
   turtleSize: number;
+  turtleSizeScaleVersion: number;
   customPosition: OverlayCustomPosition | null;
   lastReminderShownAt: string | null;
   excludedHostnames: string[];
