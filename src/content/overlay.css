@@ -145,6 +145,7 @@
 .turtle-overlay-toggle,
 .turtle-overlay-segment-button,
 .turtle-overlay-stepper-button,
+.turtle-overlay-ok-button,
 .turtle-overlay-preferences-button,
 .turtle-overlay-flag-button,
 .turtle-overlay-close-button {
@@ -208,6 +209,34 @@
   font-size: 11px;
   font-weight: 800;
   text-align: center;
+}
+
+.turtle-overlay-stopwatch {
+  display: grid;
+  grid-template-columns: 24px minmax(62px, 1fr) 24px 32px;
+  gap: 4px;
+  align-items: center;
+}
+
+.turtle-overlay-stopwatch-value,
+.turtle-overlay-next-countdown {
+  min-width: 62px;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.turtle-overlay-ok-button {
+  min-width: 32px;
+  padding: 0 4px;
+  background: #2f6e4f;
+  color: #fffdf7;
+}
+
+.turtle-overlay-next-countdown {
+  justify-self: start;
+  font-size: 11px;
 }
 
 .turtle-overlay-preferences-button {

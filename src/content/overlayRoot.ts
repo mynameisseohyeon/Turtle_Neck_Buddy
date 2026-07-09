@@ -92,9 +92,11 @@ const OVERLAY_COPY: Record<
     enabledLabel: string;
     positionLabel: string;
     intervalLabel: string;
+    nextLabel: string;
     preferencesLabel: string;
     languageLabel: string;
     sizeLabel: string;
+    okLabel: string;
     backLabel: string;
     closeLabel: string;
     left: string;
@@ -108,9 +110,11 @@ const OVERLAY_COPY: Record<
     enabledLabel: "Alert",
     positionLabel: "Side",
     intervalLabel: "Every",
+    nextLabel: "Next",
     preferencesLabel: "Prefs",
     languageLabel: "Language",
     sizeLabel: "Turtle size",
+    okLabel: "OK",
     backLabel: "Back",
     closeLabel: "Close",
     left: "Left",
@@ -123,9 +127,11 @@ const OVERLAY_COPY: Record<
     enabledLabel: "알림",
     positionLabel: "위치",
     intervalLabel: "주기",
+    nextLabel: "다음",
     preferencesLabel: "환경 설정",
     languageLabel: "언어",
     sizeLabel: "거북이 크기",
+    okLabel: "OK",
     backLabel: "뒤로",
     closeLabel: "닫기",
     left: "왼쪽",
@@ -138,9 +144,11 @@ const OVERLAY_COPY: Record<
     enabledLabel: "通知",
     positionLabel: "位置",
     intervalLabel: "間隔",
+    nextLabel: "次",
     preferencesLabel: "環境設定",
     languageLabel: "言語",
     sizeLabel: "カメの大きさ",
+    okLabel: "OK",
     backLabel: "戻る",
     closeLabel: "閉じる",
     left: "左",
@@ -153,9 +161,11 @@ const OVERLAY_COPY: Record<
     enabledLabel: "提醒",
     positionLabel: "位置",
     intervalLabel: "间隔",
+    nextLabel: "下次",
     preferencesLabel: "偏好设置",
     languageLabel: "语言",
     sizeLabel: "乌龟大小",
+    okLabel: "OK",
     backLabel: "返回",
     closeLabel: "关闭",
     left: "左",
@@ -168,9 +178,11 @@ const OVERLAY_COPY: Record<
     enabledLabel: "Aviso",
     positionLabel: "Lado",
     intervalLabel: "Cada",
+    nextLabel: "Próx.",
     preferencesLabel: "Preferencias",
     languageLabel: "Idioma",
     sizeLabel: "Tamaño",
+    okLabel: "OK",
     backLabel: "Atrás",
     closeLabel: "Cerrar",
     left: "Izq.",
@@ -184,7 +196,9 @@ let overlaySettings: OverlaySettings = DEFAULT_OVERLAY_SETTINGS;
 let bubbleMode: "reminder" | "settings" | "preferences" = "reminder";
 let ambientTimerId: number | undefined;
 let reactionTimerId: number | undefined;
+let settingsCountdownTimerId: number | undefined;
 let ambientFrameIndex = 0;
+let pendingReminderIntervalMinutes = DEFAULT_OVERLAY_SETTINGS.reminderIntervalMinutes;
 let isReacting = false;
 let isDragging = false;
 let hasDragged = false;
@@ -352,10 +366,20 @@ function clearReactionAnimation() {
   reactionTimerId = undefined;
 }
 
+function clearSettingsCountdown() {
+  if (settingsCountdownTimerId === undefined) {
+    return;
+  }
+
+  window.clearInterval(settingsCountdownTimerId);
+  settingsCountdownTimerId = undefined;
+}
+
 function stopOverlayAfterContextInvalidated() {
   overlayStopped = true;
   clearReactionAnimation();
   clearAmbientAnimation();
+  clearSettingsCountdown();
   document.getElementById(OVERLAY_HOST_ID)?.remove();
 }
 
@@ -395,6 +419,7 @@ async function saveCustomPositionFromPointer(clientX: number, clientY: number) {
 }
 
 function openSettingsBubble() {
+  pendingReminderIntervalMinutes = overlaySettings.reminderIntervalMinutes;
   bubbleMode = "settings";
   renderOverlay();
 }
@@ -406,7 +431,37 @@ function openPreferencesBubble() {
 
 function closeSettingsBubble() {
   bubbleMode = "reminder";
+  clearSettingsCountdown();
   renderOverlay();
+}
+
+function formatStopwatchSeconds(totalSeconds: number) {
+  const boundedSeconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(boundedSeconds / 60);
+  const seconds = boundedSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getRemainingReminderSeconds() {
+  if (!overlaySettings.lastReminderShownAt) {
+    return overlaySettings.reminderIntervalMinutes * 60;
+  }
+
+  const lastShownAt = Date.parse(overlaySettings.lastReminderShownAt);
+  if (!Number.isFinite(lastShownAt)) {
+    return overlaySettings.reminderIntervalMinutes * 60;
+  }
+
+  const elapsedSeconds = Math.floor((Date.now() - lastShownAt) / 1000);
+  return Math.max(0, overlaySettings.reminderIntervalMinutes * 60 - elapsedSeconds);
+}
+
+function startSettingsCountdown(display: HTMLElement) {
+  clearSettingsCountdown();
+  display.textContent = formatStopwatchSeconds(getRemainingReminderSeconds());
+  settingsCountdownTimerId = window.setInterval(() => {
+    display.textContent = formatStopwatchSeconds(getRemainingReminderSeconds());
+  }, 1000);
 }
 
 function startAmbientAnimation(mascot: HTMLImageElement) {
@@ -502,6 +557,7 @@ function renderOverlay() {
     return;
   }
 
+  clearSettingsCountdown();
   const shadowRoot = createOverlayHost();
   const currentState = overlayState.visibilityState;
   const host = shadowRoot.host as HTMLElement;
@@ -726,37 +782,53 @@ function createSettingsBubbleContent() {
   intervalLabel.textContent = copy.intervalLabel;
 
   const intervalGroup = document.createElement("div");
-  intervalGroup.className = "turtle-overlay-stepper";
+  intervalGroup.className = "turtle-overlay-stopwatch";
   const decreaseButton = document.createElement("button");
   decreaseButton.type = "button";
   decreaseButton.className = "turtle-overlay-stepper-button";
   decreaseButton.textContent = "-";
   decreaseButton.addEventListener("click", (event) => {
     event.stopPropagation();
-    void updateOverlaySettings({
-      ...overlaySettings,
-      reminderIntervalMinutes: normalizeReminderIntervalMinutes(
-        overlaySettings.reminderIntervalMinutes - REMINDER_INTERVAL_STEP_MINUTES
-      )
-    });
+    pendingReminderIntervalMinutes = normalizeReminderIntervalMinutes(
+      pendingReminderIntervalMinutes - REMINDER_INTERVAL_STEP_MINUTES
+    );
+    renderOverlay();
   });
   const intervalValue = document.createElement("span");
-  intervalValue.className = "turtle-overlay-stepper-value";
-  intervalValue.textContent = `${overlaySettings.reminderIntervalMinutes}${copy.minutes}`;
+  intervalValue.className = "turtle-overlay-stopwatch-value";
+  intervalValue.textContent = formatStopwatchSeconds(pendingReminderIntervalMinutes * 60);
   const increaseButton = document.createElement("button");
   increaseButton.type = "button";
   increaseButton.className = "turtle-overlay-stepper-button";
   increaseButton.textContent = "+";
   increaseButton.addEventListener("click", (event) => {
     event.stopPropagation();
+    pendingReminderIntervalMinutes = normalizeReminderIntervalMinutes(
+      pendingReminderIntervalMinutes + REMINDER_INTERVAL_STEP_MINUTES
+    );
+    renderOverlay();
+  });
+  const confirmButton = document.createElement("button");
+  confirmButton.type = "button";
+  confirmButton.className = "turtle-overlay-ok-button";
+  confirmButton.textContent = copy.okLabel;
+  confirmButton.addEventListener("click", (event) => {
+    event.stopPropagation();
     void updateOverlaySettings({
       ...overlaySettings,
-      reminderIntervalMinutes: normalizeReminderIntervalMinutes(
-        overlaySettings.reminderIntervalMinutes + REMINDER_INTERVAL_STEP_MINUTES
-      )
+      reminderIntervalMinutes: pendingReminderIntervalMinutes,
+      lastReminderShownAt: new Date().toISOString()
     });
   });
-  intervalGroup.append(decreaseButton, intervalValue, increaseButton);
+  intervalGroup.append(decreaseButton, intervalValue, increaseButton, confirmButton);
+
+  const nextLabel = document.createElement("span");
+  nextLabel.className = "turtle-overlay-settings-label";
+  nextLabel.textContent = copy.nextLabel;
+
+  const nextCountdown = document.createElement("span");
+  nextCountdown.className = "turtle-overlay-next-countdown";
+  startSettingsCountdown(nextCountdown);
 
   const preferencesButton = document.createElement("button");
   preferencesButton.type = "button";
@@ -775,6 +847,8 @@ function createSettingsBubbleContent() {
     positionGroup,
     intervalLabel,
     intervalGroup,
+    nextLabel,
+    nextCountdown,
     preferencesButton
   );
 
