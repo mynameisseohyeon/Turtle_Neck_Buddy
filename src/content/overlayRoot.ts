@@ -23,6 +23,8 @@ const MAX_TURTLE_SIZE = 80;
 const TURTLE_SIZE_SCALE_VERSION = 2;
 const BASE_TURTLE_WIDTH_PX = 166;
 const BASE_TURTLE_HEIGHT_PX = 263;
+const BASE_TURTLE_STAGE_WIDTH_PX = 190;
+const TURTLE_STAGE_HEADROOM_PX = 10;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
 const OVERLAY_LANGUAGE_FLAGS: Record<OverlayLanguage, { flag: string; label: string }> = {
   en: { flag: "🇺🇸", label: "English" },
@@ -266,10 +268,23 @@ function normalizeTurtleSize(value: unknown, version: unknown = TURTLE_SIZE_SCAL
   return Math.min(MAX_TURTLE_SIZE, Math.max(MIN_TURTLE_SIZE, Math.round(migratedValue)));
 }
 
-function applyTurtleSizeStyle(mascot: HTMLImageElement, turtleSize = overlaySettings.turtleSize) {
+function applyTurtleSizeStyle(
+  mascot: HTMLImageElement,
+  turtleSize = overlaySettings.turtleSize,
+  mascotStage?: HTMLElement
+) {
   const turtleSizeScale = 0.7 + (turtleSize - DEFAULT_TURTLE_SIZE) / 100;
-  mascot.style.maxWidth = `${Math.round(BASE_TURTLE_WIDTH_PX * turtleSizeScale)}px`;
-  mascot.style.maxHeight = `${Math.round(BASE_TURTLE_HEIGHT_PX * turtleSizeScale)}px`;
+  const turtleWidth = Math.round(BASE_TURTLE_WIDTH_PX * turtleSizeScale);
+  const turtleHeight = Math.round(BASE_TURTLE_HEIGHT_PX * turtleSizeScale);
+  mascot.style.width = "auto";
+  mascot.style.height = `${turtleHeight}px`;
+  mascot.style.maxWidth = "none";
+  mascot.style.maxHeight = "none";
+
+  if (mascotStage) {
+    mascotStage.style.width = `${Math.max(BASE_TURTLE_STAGE_WIDTH_PX, turtleWidth + 32, Math.round(turtleHeight * 0.95))}px`;
+    mascotStage.style.height = `${turtleHeight + TURTLE_STAGE_HEADROOM_PX}px`;
+  }
 }
 
 function getOverlayCopy() {
@@ -518,10 +533,10 @@ function renderOverlay() {
   mascot.className = "turtle-overlay-mascot";
   mascot.alt = "";
   mascot.draggable = false;
-  applyTurtleSizeStyle(mascot);
 
   const mascotStage = document.createElement("div");
   mascotStage.className = "turtle-overlay-mascot-stage";
+  applyTurtleSizeStyle(mascot, overlaySettings.turtleSize, mascotStage);
   mascotStage.addEventListener("pointerenter", () => playNeckReaction(mascot));
   mascotStage.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) {
@@ -824,7 +839,7 @@ function createPreferencesBubbleContent() {
       .getElementById(OVERLAY_HOST_ID)
       ?.shadowRoot?.querySelector<HTMLImageElement>(".turtle-overlay-mascot");
     if (currentMascot) {
-      applyTurtleSizeStyle(currentMascot, nextSize);
+      applyTurtleSizeStyle(currentMascot, nextSize, currentMascot.parentElement ?? undefined);
     }
   });
   sizeInput.addEventListener("change", (event) => {
