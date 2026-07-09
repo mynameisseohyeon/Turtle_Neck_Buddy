@@ -13,6 +13,11 @@
   left: 0;
 }
 
+:host([data-custom-position="true"]) {
+  right: auto;
+  bottom: auto;
+}
+
 .turtle-overlay {
   display: grid;
   justify-items: end;
@@ -26,6 +31,15 @@
 :host([data-position="bottom-left"]) .turtle-overlay {
   justify-items: start;
   transform: translateX(-54%);
+}
+
+:host([data-custom-position="true"]) .turtle-overlay,
+:host([data-custom-position="true"]) .turtle-overlay[data-state="hidden"],
+:host([data-custom-position="true"]) .turtle-overlay[data-state="peeking"],
+:host([data-custom-position="true"]) .turtle-overlay[data-state="alert"],
+:host([data-custom-position="true"]) .turtle-overlay[data-state="stretch"],
+:host([data-custom-position="true"]) .turtle-overlay[data-state="success"] {
+  transform: translateX(0);
 }
 
 .turtle-overlay[data-state="hidden"] {
@@ -110,8 +124,15 @@
   align-items: center;
 }
 
-.turtle-overlay-settings-title {
+.turtle-overlay-settings-header {
   grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.turtle-overlay-settings-title {
   font-size: 12px;
   line-height: 1.2;
 }
@@ -122,7 +143,12 @@
 }
 
 .turtle-overlay-toggle,
-.turtle-overlay-segment-button {
+.turtle-overlay-segment-button,
+.turtle-overlay-stepper-button,
+.turtle-overlay-ok-button,
+.turtle-overlay-preferences-button,
+.turtle-overlay-flag-button,
+.turtle-overlay-close-button {
   min-height: 24px;
   border: 2px solid #213329;
   background: #fffdf7;
@@ -141,6 +167,11 @@
   box-shadow: 2px 2px 0 #213329;
 }
 
+.turtle-overlay-close-button {
+  width: 24px;
+  padding: 0;
+}
+
 .turtle-overlay-toggle[data-active="true"],
 .turtle-overlay-segment-button[data-active="true"] {
   background: #2f6e4f;
@@ -156,6 +187,100 @@
   padding: 0 6px;
 }
 
+.turtle-overlay-language-segment {
+  flex-wrap: wrap;
+  max-width: 116px;
+}
+
+.turtle-overlay-stepper {
+  display: grid;
+  grid-template-columns: 24px minmax(54px, auto) 24px;
+  gap: 4px;
+  align-items: center;
+}
+
+.turtle-overlay-stepper-button {
+  width: 24px;
+  padding: 0;
+}
+
+.turtle-overlay-stepper-value {
+  min-width: 54px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.turtle-overlay-stopwatch {
+  display: grid;
+  grid-template-columns: 24px minmax(62px, 1fr) 24px 32px;
+  gap: 4px;
+  align-items: center;
+}
+
+.turtle-overlay-stopwatch-value,
+.turtle-overlay-next-countdown {
+  min-width: 62px;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.turtle-overlay-ok-button {
+  min-width: 32px;
+  padding: 0 4px;
+  background: #2f6e4f;
+  color: #fffdf7;
+}
+
+.turtle-overlay-next-countdown {
+  justify-self: start;
+  font-size: 11px;
+}
+
+.turtle-overlay-preferences-button {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  box-shadow: 2px 2px 0 #213329;
+}
+
+.turtle-overlay-flag-segment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  max-width: 118px;
+}
+
+.turtle-overlay-flag-button {
+  width: 28px;
+  padding: 0;
+  font-size: 14px;
+}
+
+.turtle-overlay-flag-button[data-active="true"] {
+  background: #2f6e4f;
+}
+
+.turtle-overlay-size-control {
+  display: grid;
+  grid-template-columns: minmax(84px, 1fr) 24px;
+  gap: 6px;
+  align-items: center;
+}
+
+.turtle-overlay-size-control input {
+  width: 100%;
+  accent-color: #2f6e4f;
+  cursor: pointer;
+}
+
+.turtle-overlay-size-value {
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+}
+
 .turtle-overlay-mascot-stage {
   display: flex;
   align-items: flex-end;
@@ -164,8 +289,22 @@
   height: 286px;
   overflow: visible;
   pointer-events: auto;
+  cursor: grab;
   transform-origin: 78% 100%;
   animation: turtle-gentle-breathe 1800ms steps(3, end) infinite;
+  touch-action: none;
+}
+
+.turtle-overlay-mascot-stage:active {
+  cursor: grabbing;
+}
+
+.turtle-overlay-mascot-stage[data-dragging="true"] {
+  animation: none;
+}
+
+.turtle-overlay-mascot-stage[data-dragging="true"] .turtle-overlay-mascot {
+  transform: translateY(-3px);
 }
 
 :host([data-position="bottom-left"]) .turtle-overlay-mascot-stage {
@@ -175,8 +314,8 @@
 
 .turtle-overlay-mascot {
   display: block;
-  max-width: 180px;
-  max-height: 286px;
+  max-width: 166px;
+  max-height: 263px;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -186,6 +325,10 @@
 
 :host([data-position="bottom-left"]) .turtle-overlay-mascot {
   transform: scaleX(-1);
+}
+
+:host([data-position="bottom-left"]) .turtle-overlay-mascot-stage[data-dragging="true"] .turtle-overlay-mascot {
+  transform: translateY(-3px) scaleX(-1);
 }
 
 @keyframes turtle-gentle-breathe {

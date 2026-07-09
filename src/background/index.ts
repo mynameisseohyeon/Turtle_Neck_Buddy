@@ -5,6 +5,7 @@ import type {
 } from "../shared/overlayMessages";
 import {
   DEFAULT_OVERLAY_SETTINGS,
+  DEFAULT_REMINDER_INTERVAL_MINUTES,
   normalizeOverlaySettings,
   OVERLAY_SETTINGS_STORAGE_KEY
 } from "../shared/overlaySettings";
@@ -70,6 +71,33 @@ function scheduleReminderAlarm(intervalMinutes: number) {
   void chrome.alarms.create(REMINDER_ALARM_NAME, {
     delayInMinutes: intervalMinutes,
     periodInMinutes: intervalMinutes
+  });
+}
+
+function canShowReminder(settings: Awaited<ReturnType<typeof getOverlaySettings>>, now = Date.now()) {
+  if (!settings.overlayEnabled) {
+    return false;
+  }
+
+  if (!settings.lastReminderShownAt) {
+    return true;
+  }
+
+  const lastShownAt = new Date(settings.lastReminderShownAt).getTime();
+
+  if (!Number.isFinite(lastShownAt)) {
+    return true;
+  }
+
+  return now - lastShownAt >= settings.reminderIntervalMinutes * 60 * 1000;
+}
+
+async function markReminderShown(settings: Awaited<ReturnType<typeof getOverlaySettings>>, now = new Date()) {
+  await chrome.storage.local.set({
+    [OVERLAY_SETTINGS_STORAGE_KEY]: {
+      ...settings,
+      lastReminderShownAt: now.toISOString()
+    }
   });
 }
 
@@ -183,10 +211,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 
   void getOverlaySettings().then((settings) => {
-    if (!settings.overlayEnabled) {
+    if (!canShowReminder(settings)) {
       return;
     }
 
+    void markReminderShown(settings);
     showExtensionNotice("목 쉬는 시간이에요. 30초만 스트레칭해요.");
   });
 });
@@ -199,7 +228,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   const settings = normalizeOverlaySettings(changes[OVERLAY_SETTINGS_STORAGE_KEY].newValue);
   void chrome.alarms.clear(REMINDER_ALARM_NAME, () => {
     if (settings.overlayEnabled) {
-      scheduleReminderAlarm(settings.reminderIntervalMinutes);
+      scheduleReminderAlarm(settings.reminderIntervalMinutes || DEFAULT_REMINDER_INTERVAL_MINUTES);
     }
   });
 });

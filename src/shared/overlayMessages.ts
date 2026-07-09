@@ -5,12 +5,22 @@ export type OverlayReminderPayload = {
 
 export type OverlayPosition = "bottom-right" | "bottom-left";
 
-export type ReminderIntervalMinutes = 30 | 50 | 60;
+export type OverlayLanguage = "en" | "ko" | "ja" | "zh" | "es";
+
+export type OverlayCustomPosition = {
+  xPercent: number;
+  yPercent: number;
+};
 
 export type OverlaySettings = {
   overlayEnabled: boolean;
   overlayPosition: OverlayPosition;
-  reminderIntervalMinutes: ReminderIntervalMinutes;
+  reminderIntervalMinutes: number;
+  language: OverlayLanguage;
+  turtleSize: number;
+  turtleSizeScaleVersion: number;
+  customPosition: OverlayCustomPosition | null;
+  lastReminderShownAt: string | null;
   excludedHostnames: string[];
 };
 
