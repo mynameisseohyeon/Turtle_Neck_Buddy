@@ -12,6 +12,7 @@ const STRETCH_REMINDER_TEXT = "Time to stretch!";
 const IDLE_FRAME_INTERVAL_MS = 620;
 const ALERT_FRAME_INTERVAL_MS = 90;
 const REACTION_FRAME_INTERVAL_MS = 70;
+const DRAG_FRAME_INTERVAL_MS = 80;
 const NECK_REACTION_COOLDOWN_MS = 2400;
 const MIN_REMINDER_INTERVAL_MINUTES = 10;
 const MAX_REMINDER_INTERVAL_MINUTES = 180;
@@ -67,6 +68,17 @@ const FRAMES = {
     "assets/turtle/frames/neck_out/neck_out_06.png",
     "assets/turtle/frames/neck_out/neck_out_07.png",
     "assets/turtle/frames/neck_out/neck_out_08.png"
+  ],
+  drag: [
+    "assets/turtle/frames/drag/drag_01.png",
+    "assets/turtle/frames/drag/drag_02.png",
+    "assets/turtle/frames/drag/drag_03.png",
+    "assets/turtle/frames/drag/drag_04.png",
+    "assets/turtle/frames/drag/drag_05.png",
+    "assets/turtle/frames/drag/drag_06.png",
+    "assets/turtle/frames/drag/drag_07.png",
+    "assets/turtle/frames/drag/drag_08.png",
+    "assets/turtle/frames/drag/drag_09.png"
   ]
 } as const;
 
@@ -177,6 +189,8 @@ let hasDragged = false;
 let didJustDrag = false;
 let dragOffset = { x: 0, y: 0 };
 let dragStart = { x: 0, y: 0 };
+let lastDragFramePath: string = FRAMES.drag[4];
+let lastDragFrameChangedAt = 0;
 let nextNeckReactionAt = 0;
 let overlayStopped = false;
 
@@ -280,6 +294,29 @@ function setMascotFrame(mascot: HTMLImageElement, framePath: string) {
 
   mascot.src = frameUrl;
   return true;
+}
+
+function getDragFramePath(deltaX: number, deltaY: number) {
+  if (Math.hypot(deltaX, deltaY) < 3) {
+    return FRAMES.drag[4];
+  }
+
+  const horizontalIndex = deltaX < -3 ? 0 : deltaX > 3 ? 2 : 1;
+  const verticalIndex = deltaY < -3 ? 0 : deltaY > 3 ? 2 : 1;
+  return FRAMES.drag[verticalIndex * 3 + horizontalIndex];
+}
+
+function setDragFrame(mascot: HTMLImageElement, deltaX: number, deltaY: number) {
+  const now = Date.now();
+  const nextFramePath = getDragFramePath(deltaX, deltaY);
+
+  if (nextFramePath === lastDragFramePath && now - lastDragFrameChangedAt < DRAG_FRAME_INTERVAL_MS) {
+    return;
+  }
+
+  lastDragFramePath = nextFramePath;
+  lastDragFrameChangedAt = now;
+  setMascotFrame(mascot, nextFramePath);
 }
 
 function clearAmbientAnimation() {
@@ -494,6 +531,13 @@ function renderOverlay() {
     const hostRect = host.getBoundingClientRect();
     isDragging = true;
     hasDragged = false;
+    isReacting = false;
+    clearReactionAnimation();
+    clearAmbientAnimation();
+    mascotStage.dataset.dragging = "true";
+    lastDragFramePath = FRAMES.drag[4];
+    lastDragFrameChangedAt = 0;
+    setMascotFrame(mascot, lastDragFramePath);
     dragOffset = {
       x: event.clientX - hostRect.left,
       y: event.clientY - hostRect.top
@@ -516,6 +560,7 @@ function renderOverlay() {
     }
 
     hasDragged = true;
+    setDragFrame(mascot, event.clientX - dragStart.x, event.clientY - dragStart.y);
     const x = Math.min(window.innerWidth - 24, Math.max(24, event.clientX - dragOffset.x));
     const y = Math.min(window.innerHeight - 24, Math.max(24, event.clientY - dragOffset.y));
     host.dataset.customPosition = "true";
@@ -530,14 +575,17 @@ function renderOverlay() {
     }
 
     isDragging = false;
+    mascotStage.dataset.dragging = "false";
     mascotStage.releasePointerCapture(event.pointerId);
 
     if (!hasDragged) {
+      startAmbientAnimation(mascot);
       openSettingsBubble();
       return;
     }
 
     didJustDrag = true;
+    startAmbientAnimation(mascot);
     void saveCustomPositionFromPointer(event.clientX - dragOffset.x, event.clientY - dragOffset.y);
     window.setTimeout(() => {
       didJustDrag = false;

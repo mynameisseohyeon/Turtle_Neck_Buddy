@@ -270,6 +270,14 @@
   cursor: grabbing;
 }
 
+.turtle-overlay-mascot-stage[data-dragging="true"] {
+  animation: none;
+}
+
+.turtle-overlay-mascot-stage[data-dragging="true"] .turtle-overlay-mascot {
+  transform: translateY(-3px);
+}
+
 :host([data-position="bottom-left"]) .turtle-overlay-mascot-stage {
   justify-content: flex-start;
   transform-origin: 22% 100%;
@@ -288,6 +296,10 @@
 
 :host([data-position="bottom-left"]) .turtle-overlay-mascot {
   transform: scaleX(-1);
+}
+
+:host([data-position="bottom-left"]) .turtle-overlay-mascot-stage[data-dragging="true"] .turtle-overlay-mascot {
+  transform: translateY(-3px) scaleX(-1);
 }
 
 @keyframes turtle-gentle-breathe {
