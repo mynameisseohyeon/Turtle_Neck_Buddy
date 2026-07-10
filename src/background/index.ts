@@ -13,13 +13,18 @@ import {
 const REMINDER_ALARM_NAME = "turtle-neck-buddy-reminder";
 const OVERLAY_SCRIPT_FILE = "content/overlay.js";
 
-function showExtensionNotice(message: string) {
-  void chrome.notifications.create({
-    type: "basic",
-    iconUrl: "icons/icon128.png",
-    title: "Turtle Neck Buddy",
-    message
-  });
+async function showExtensionNotice(message: string) {
+  try {
+    await chrome.notifications.create({
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: "Turtle Neck Buddy",
+      message
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function getSupportedOrigin(urlString?: string): { hostname: string; originPattern: string } | null {
@@ -164,6 +169,25 @@ async function showOverlayInActiveTab() {
   }
 }
 
+async function deliverScheduledReminder(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
+  let overlayDelivered = false;
+
+  try {
+    overlayDelivered = (await showOverlayInActiveTab()).ok;
+  } catch {
+    overlayDelivered = false;
+  }
+
+  // Chrome internal pages cannot host content scripts, so retain a visible fallback there.
+  const delivered = overlayDelivered
+    ? true
+    : await showExtensionNotice("목 쉬는 시간이에요. 30초만 스트레칭해요.");
+
+  if (delivered) {
+    await markReminderShown(settings);
+  }
+}
+
 async function showOverlayFromActionClick(tab: chrome.tabs.Tab) {
   const supportedOrigin = getSupportedOrigin(tab.url);
 
@@ -215,8 +239,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       return;
     }
 
-    void markReminderShown(settings);
-    showExtensionNotice("목 쉬는 시간이에요. 30초만 스트레칭해요.");
+    void deliverScheduledReminder(settings);
   });
 });
 
