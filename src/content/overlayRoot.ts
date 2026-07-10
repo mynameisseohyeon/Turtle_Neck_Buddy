@@ -8,7 +8,6 @@ import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/ove
 
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
 const OVERLAY_SETTINGS_STORAGE_KEY = "turtle-neck-buddy-overlay-settings";
-const STRETCH_REMINDER_TEXT = "Time to stretch!";
 const IDLE_FRAME_INTERVAL_MS = 620;
 const ALERT_FRAME_INTERVAL_MS = 90;
 const REACTION_FRAME_INTERVAL_MS = 70;
@@ -27,7 +26,10 @@ const TURTLE_SIZE_SCALE_VERSION = 2;
 const BASE_TURTLE_WIDTH_PX = 166;
 const BASE_TURTLE_HEIGHT_PX = 263;
 const BASE_TURTLE_STAGE_WIDTH_PX = 190;
+// Wide drag poses need a cap so their visual footprint matches the peeking turtle.
+const TURTLE_VISUAL_WIDTH_RATIO = 1.2;
 const TURTLE_STAGE_HEADROOM_PX = 10;
+const EDGE_SNAP_THRESHOLD_PX = 24;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
 const OVERLAY_LANGUAGE_FLAGS: Record<OverlayLanguage, { flag: string; label: string }> = {
   en: { flag: "🇺🇸", label: "English" },
@@ -47,13 +49,19 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   lastReminderShownAt: null,
   excludedHostnames: []
 };
-const INITIAL_VISIBLE_OVERLAY_STATE: OverlayViewState = {
+const WAITING_OVERLAY_STATE: OverlayViewState = {
   visibilityState: "peeking",
   turtleState: "idle",
-  message: STRETCH_REMINDER_TEXT
+  message: ""
 };
 
 const FRAMES = {
+  idle: [
+    "assets/turtle/frames/idle/idle_01.png",
+    "assets/turtle/frames/idle/idle_02.png",
+    "assets/turtle/frames/idle/idle_03.png",
+    "assets/turtle/frames/idle/idle_04.png"
+  ],
   neckIn: [
     "assets/turtle/frames/neck_in/neck_in_01.png",
     "assets/turtle/frames/neck_in/neck_in_02.png",
@@ -287,6 +295,7 @@ let hasDragged = false;
 let didJustDrag = false;
 let dragOffset = { x: 0, y: 0 };
 let dragStart = { x: 0, y: 0 };
+let dragPosition = { x: 0, y: 0 };
 let lastDragFramePath: string = FRAMES.drag[4];
 let lastDragFrameChangedAt = 0;
 let nextNeckReactionAt = 0;
@@ -350,7 +359,7 @@ function normalizeCustomPosition(value: unknown) {
   }
 
   return {
-    xPercent: Math.min(95, Math.max(5, candidate.xPercent)),
+    xPercent: Math.min(100, Math.max(0, candidate.xPercent)),
     yPercent: Math.min(95, Math.max(5, candidate.yPercent))
   };
 }
@@ -372,13 +381,14 @@ function applyTurtleSizeStyle(
   const turtleSizeScale = 0.7 + (turtleSize - DEFAULT_TURTLE_SIZE) / 100;
   const turtleWidth = Math.round(BASE_TURTLE_WIDTH_PX * turtleSizeScale);
   const turtleHeight = Math.round(BASE_TURTLE_HEIGHT_PX * turtleSizeScale);
+  const turtleVisualMaxWidth = Math.round(turtleWidth * TURTLE_VISUAL_WIDTH_RATIO);
   mascot.style.width = "auto";
   mascot.style.height = `${turtleHeight}px`;
-  mascot.style.maxWidth = "none";
-  mascot.style.maxHeight = "none";
+  mascot.style.maxWidth = `${turtleVisualMaxWidth}px`;
+  mascot.style.maxHeight = `${turtleHeight}px`;
 
   if (mascotStage) {
-    mascotStage.style.width = `${Math.max(BASE_TURTLE_STAGE_WIDTH_PX, turtleWidth + 32, Math.round(turtleHeight * 0.95))}px`;
+    mascotStage.style.width = `${Math.max(BASE_TURTLE_STAGE_WIDTH_PX, turtleVisualMaxWidth + 24)}px`;
     mascotStage.style.height = `${turtleHeight + TURTLE_STAGE_HEADROOM_PX}px`;
   }
 }
@@ -459,7 +469,15 @@ function getAmbientFrames() {
     return getStretchPhaseFrames();
   }
 
-  return overlayState.visibilityState === "alert" ? FRAMES.neckOut : FRAMES.neckIn;
+  if (overlayState.visibilityState === "alert") {
+    return FRAMES.neckOut;
+  }
+
+  const isFreelyPositioned =
+    overlaySettings.customPosition !== null &&
+    overlaySettings.customPosition.xPercent !== 0 &&
+    overlaySettings.customPosition.xPercent !== 100;
+  return isFreelyPositioned ? FRAMES.idle : FRAMES.neckIn;
 }
 
 function clearAmbientAnimation() {
@@ -543,11 +561,25 @@ async function updateOverlaySettings(nextSettings: OverlaySettings) {
   renderOverlay();
 }
 
-async function saveCustomPositionFromPointer(clientX: number, clientY: number) {
-  const xPercent = (clientX / window.innerWidth) * 100;
-  const yPercent = (clientY / window.innerHeight) * 100;
+function getEdgeSnapFromBounds(left: number, width: number): OverlaySettings["overlayPosition"] | null {
+  if (left <= EDGE_SNAP_THRESHOLD_PX) {
+    return "bottom-left";
+  }
+
+  if (left + width >= window.innerWidth - EDGE_SNAP_THRESHOLD_PX) {
+    return "bottom-right";
+  }
+
+  return null;
+}
+
+async function saveCustomPositionFromDrag(left: number, stageTop: number, width: number) {
+  const edgeSnap = getEdgeSnapFromBounds(left, width);
+  const xPercent = edgeSnap === "bottom-left" ? 0 : edgeSnap === "bottom-right" ? 100 : (left / window.innerWidth) * 100;
+  const yPercent = (stageTop / window.innerHeight) * 100;
   await updateOverlaySettings({
     ...overlaySettings,
+    overlayPosition: edgeSnap ?? overlaySettings.overlayPosition,
     customPosition: normalizeCustomPosition({ xPercent, yPercent })
   });
 }
@@ -566,6 +598,17 @@ function openPreferencesBubble() {
 function closeSettingsBubble() {
   bubbleMode = "reminder";
   clearSettingsCountdown();
+  renderOverlay();
+}
+
+function returnToWaitingState() {
+  clearReactionAnimation();
+  clearAmbientAnimation();
+  clearStretchTimer();
+  clearSuccessTimer();
+  isReacting = false;
+  bubbleMode = "reminder";
+  overlayState = { ...WAITING_OVERLAY_STATE };
   renderOverlay();
 }
 
@@ -617,7 +660,7 @@ function completeStretchRoutine() {
   };
   renderOverlay();
   successTimerId = window.setTimeout(() => {
-    hideOverlay();
+    returnToWaitingState();
   }, SUCCESS_VISIBLE_MS);
 }
 
@@ -758,12 +801,17 @@ function renderOverlay() {
 
   if (overlaySettings.customPosition) {
     host.dataset.customPosition = "true";
-    host.style.left = `${overlaySettings.customPosition.xPercent}%`;
-    host.style.top = `${overlaySettings.customPosition.yPercent}%`;
-    host.style.right = "auto";
-    host.style.bottom = "auto";
+    const edgeSnap =
+      overlaySettings.customPosition.xPercent === 0
+        ? "bottom-left"
+        : overlaySettings.customPosition.xPercent === 100
+          ? "bottom-right"
+          : null;
+    host.dataset.edgeSnapped = String(edgeSnap !== null);
+    host.dataset.position = edgeSnap ?? overlaySettings.overlayPosition;
   } else {
     delete host.dataset.customPosition;
+    delete host.dataset.edgeSnapped;
     host.style.removeProperty("left");
     host.style.removeProperty("top");
     host.style.removeProperty("right");
@@ -792,7 +840,9 @@ function renderOverlay() {
       return;
     }
 
-    const hostRect = host.getBoundingClientRect();
+    host.dataset.edgeSnapped = "false";
+    const overlayRect = overlay.getBoundingClientRect();
+    const bubbleHeight = bubble?.offsetHeight ?? 0;
     isDragging = true;
     hasDragged = false;
     isReacting = false;
@@ -803,8 +853,8 @@ function renderOverlay() {
     lastDragFrameChangedAt = 0;
     setMascotFrame(mascot, lastDragFramePath);
     dragOffset = {
-      x: event.clientX - hostRect.left,
-      y: event.clientY - hostRect.top
+      x: event.clientX - overlayRect.left,
+      y: event.clientY - (overlayRect.top + bubbleHeight)
     };
     dragStart = {
       x: event.clientX,
@@ -825,13 +875,25 @@ function renderOverlay() {
 
     hasDragged = true;
     setDragFrame(mascot, event.clientX - dragStart.x, event.clientY - dragStart.y);
-    const x = Math.min(window.innerWidth - 24, Math.max(24, event.clientX - dragOffset.x));
-    const y = Math.min(window.innerHeight - 24, Math.max(24, event.clientY - dragOffset.y));
+    const bubbleHeight = bubble?.offsetHeight ?? 0;
+    const stageWidth = mascotStage.offsetWidth;
+    const stageHeight = mascotStage.offsetHeight;
+    const x = Math.min(Math.max(0, window.innerWidth - stageWidth), Math.max(0, event.clientX - dragOffset.x));
+    const stageTop = Math.min(
+      Math.max(0, window.innerHeight - stageHeight),
+      Math.max(0, event.clientY - dragOffset.y)
+    );
+    const edgeSnap = getEdgeSnapFromBounds(x, stageWidth);
+    if (edgeSnap) {
+      host.dataset.position = edgeSnap;
+    }
+    host.dataset.edgeSnapped = String(edgeSnap !== null);
     host.dataset.customPosition = "true";
     host.style.left = `${x}px`;
-    host.style.top = `${y}px`;
+    host.style.top = `${stageTop - bubbleHeight}px`;
     host.style.right = "auto";
     host.style.bottom = "auto";
+    dragPosition = { x, y: stageTop };
   });
   mascotStage.addEventListener("pointerup", (event) => {
     if (!isDragging) {
@@ -850,7 +912,7 @@ function renderOverlay() {
 
     didJustDrag = true;
     startAmbientAnimation(mascot);
-    void saveCustomPositionFromPointer(event.clientX - dragOffset.x, event.clientY - dragOffset.y);
+    void saveCustomPositionFromDrag(dragPosition.x, dragPosition.y, mascotStage.offsetWidth);
     window.setTimeout(() => {
       didJustDrag = false;
     }, 0);
@@ -863,29 +925,68 @@ function renderOverlay() {
     openSettingsBubble();
   });
 
-  const bubble = document.createElement("div");
-  bubble.className = "turtle-overlay-bubble";
+  let bubble: HTMLDivElement | null = null;
+  const shouldShowBubble =
+    bubbleMode !== "reminder" ||
+    currentState === "alert" ||
+    currentState === "stretch" ||
+    currentState === "success";
 
-  if (bubbleMode === "settings") {
-    bubble.dataset.mode = "settings";
-    bubble.append(createSettingsBubbleContent());
-  } else if (bubbleMode === "preferences") {
-    bubble.dataset.mode = "settings";
-    bubble.append(createPreferencesBubbleContent());
-  } else if (currentState === "stretch") {
-    bubble.dataset.mode = "stretch";
-    bubble.append(createStretchBubbleContent());
-  } else if (currentState === "success") {
-    bubble.dataset.mode = "stretch";
-    bubble.append(createSuccessBubbleContent());
-  } else {
-    bubble.dataset.mode = "action";
-    bubble.append(createReminderBubbleContent());
+  if (shouldShowBubble) {
+    bubble = document.createElement("div");
+    bubble.className = "turtle-overlay-bubble";
+
+    if (bubbleMode === "settings") {
+      bubble.dataset.mode = "settings";
+      bubble.append(createSettingsBubbleContent());
+    } else if (bubbleMode === "preferences") {
+      bubble.dataset.mode = "settings";
+      bubble.append(createPreferencesBubbleContent());
+    } else if (currentState === "stretch") {
+      bubble.dataset.mode = "stretch";
+      bubble.append(createStretchBubbleContent());
+    } else if (currentState === "success") {
+      bubble.dataset.mode = "stretch";
+      bubble.append(createSuccessBubbleContent());
+    } else {
+      bubble.dataset.mode = "action";
+      bubble.append(createReminderBubbleContent());
+    }
+
+    overlay.append(bubble);
   }
 
   mascotStage.append(mascot);
-  overlay.append(bubble, mascotStage);
+  overlay.append(mascotStage);
   shadowRoot.append(overlay);
+
+  if (overlaySettings.customPosition) {
+    const bubbleHeight = bubble?.offsetHeight ?? 0;
+    const stageWidth = mascotStage.offsetWidth;
+    const stageHeight = mascotStage.offsetHeight;
+    const storedLeft = (overlaySettings.customPosition.xPercent / 100) * window.innerWidth;
+    const storedStageTop = (overlaySettings.customPosition.yPercent / 100) * window.innerHeight;
+    const stageTop = Math.min(
+      Math.max(0, window.innerHeight - stageHeight),
+      Math.max(bubbleHeight, storedStageTop)
+    );
+
+    if (host.dataset.edgeSnapped === "true") {
+      if (host.dataset.position === "bottom-left") {
+        host.style.left = "0";
+        host.style.right = "auto";
+      } else {
+        host.style.left = "auto";
+        host.style.right = "0";
+      }
+    } else {
+      host.style.left = `${Math.min(Math.max(0, window.innerWidth - stageWidth), Math.max(0, storedLeft))}px`;
+      host.style.right = "auto";
+    }
+
+    host.style.top = `${stageTop - bubbleHeight}px`;
+    host.style.bottom = "auto";
+  }
 
   if (currentState === "hidden") {
     setMascotFrame(mascot, FRAMES.neckIn[0]);
@@ -950,31 +1051,6 @@ function createSettingsBubbleContent() {
     });
   });
 
-  const positionLabel = document.createElement("span");
-  positionLabel.className = "turtle-overlay-settings-label";
-  positionLabel.textContent = copy.positionLabel;
-
-  const positionGroup = document.createElement("div");
-  positionGroup.className = "turtle-overlay-segment";
-  [
-    { label: copy.left, value: "bottom-left" },
-    { label: copy.right, value: "bottom-right" }
-  ].forEach((option) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "turtle-overlay-segment-button";
-    button.dataset.active = String(overlaySettings.overlayPosition === option.value);
-    button.textContent = option.label;
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      void updateOverlaySettings({
-        ...overlaySettings,
-        overlayPosition: option.value as OverlaySettings["overlayPosition"]
-      });
-    });
-    positionGroup.append(button);
-  });
-
   const intervalLabel = document.createElement("span");
   intervalLabel.className = "turtle-overlay-settings-label";
   intervalLabel.textContent = copy.intervalLabel;
@@ -1012,6 +1088,8 @@ function createSettingsBubbleContent() {
   confirmButton.textContent = copy.okLabel;
   confirmButton.addEventListener("click", (event) => {
     event.stopPropagation();
+    bubbleMode = "reminder";
+    overlayState = { ...WAITING_OVERLAY_STATE };
     void updateOverlaySettings({
       ...overlaySettings,
       reminderIntervalMinutes: pendingReminderIntervalMinutes,
@@ -1041,8 +1119,6 @@ function createSettingsBubbleContent() {
     header,
     enabledLabel,
     enabledButton,
-    positionLabel,
-    positionGroup,
     intervalLabel,
     intervalGroup,
     nextLabel,
@@ -1259,6 +1335,6 @@ void loadOverlaySettings().then(() => {
     return;
   }
 
-  overlayState = INITIAL_VISIBLE_OVERLAY_STATE;
+  overlayState = { ...WAITING_OVERLAY_STATE };
   renderOverlay();
 });
