@@ -8,7 +8,6 @@ import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/ove
 
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
 const OVERLAY_SETTINGS_STORAGE_KEY = "turtle-neck-buddy-overlay-settings";
-const STRETCH_REMINDER_TEXT = "Time to stretch!";
 const IDLE_FRAME_INTERVAL_MS = 620;
 const ALERT_FRAME_INTERVAL_MS = 90;
 const REACTION_FRAME_INTERVAL_MS = 70;
@@ -47,10 +46,10 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   lastReminderShownAt: null,
   excludedHostnames: []
 };
-const INITIAL_VISIBLE_OVERLAY_STATE: OverlayViewState = {
+const WAITING_OVERLAY_STATE: OverlayViewState = {
   visibilityState: "peeking",
   turtleState: "idle",
-  message: STRETCH_REMINDER_TEXT
+  message: ""
 };
 
 const FRAMES = {
@@ -569,6 +568,17 @@ function closeSettingsBubble() {
   renderOverlay();
 }
 
+function returnToWaitingState() {
+  clearReactionAnimation();
+  clearAmbientAnimation();
+  clearStretchTimer();
+  clearSuccessTimer();
+  isReacting = false;
+  bubbleMode = "reminder";
+  overlayState = { ...WAITING_OVERLAY_STATE };
+  renderOverlay();
+}
+
 function startStretchRoutine() {
   clearSuccessTimer();
   clearStretchTimer();
@@ -617,7 +627,7 @@ function completeStretchRoutine() {
   };
   renderOverlay();
   successTimerId = window.setTimeout(() => {
-    hideOverlay();
+    returnToWaitingState();
   }, SUCCESS_VISIBLE_MS);
 }
 
@@ -863,28 +873,38 @@ function renderOverlay() {
     openSettingsBubble();
   });
 
-  const bubble = document.createElement("div");
-  bubble.className = "turtle-overlay-bubble";
+  const shouldShowBubble =
+    bubbleMode !== "reminder" ||
+    currentState === "alert" ||
+    currentState === "stretch" ||
+    currentState === "success";
 
-  if (bubbleMode === "settings") {
-    bubble.dataset.mode = "settings";
-    bubble.append(createSettingsBubbleContent());
-  } else if (bubbleMode === "preferences") {
-    bubble.dataset.mode = "settings";
-    bubble.append(createPreferencesBubbleContent());
-  } else if (currentState === "stretch") {
-    bubble.dataset.mode = "stretch";
-    bubble.append(createStretchBubbleContent());
-  } else if (currentState === "success") {
-    bubble.dataset.mode = "stretch";
-    bubble.append(createSuccessBubbleContent());
-  } else {
-    bubble.dataset.mode = "action";
-    bubble.append(createReminderBubbleContent());
+  if (shouldShowBubble) {
+    const bubble = document.createElement("div");
+    bubble.className = "turtle-overlay-bubble";
+
+    if (bubbleMode === "settings") {
+      bubble.dataset.mode = "settings";
+      bubble.append(createSettingsBubbleContent());
+    } else if (bubbleMode === "preferences") {
+      bubble.dataset.mode = "settings";
+      bubble.append(createPreferencesBubbleContent());
+    } else if (currentState === "stretch") {
+      bubble.dataset.mode = "stretch";
+      bubble.append(createStretchBubbleContent());
+    } else if (currentState === "success") {
+      bubble.dataset.mode = "stretch";
+      bubble.append(createSuccessBubbleContent());
+    } else {
+      bubble.dataset.mode = "action";
+      bubble.append(createReminderBubbleContent());
+    }
+
+    overlay.append(bubble);
   }
 
   mascotStage.append(mascot);
-  overlay.append(bubble, mascotStage);
+  overlay.append(mascotStage);
   shadowRoot.append(overlay);
 
   if (currentState === "hidden") {
@@ -1012,6 +1032,8 @@ function createSettingsBubbleContent() {
   confirmButton.textContent = copy.okLabel;
   confirmButton.addEventListener("click", (event) => {
     event.stopPropagation();
+    bubbleMode = "reminder";
+    overlayState = { ...WAITING_OVERLAY_STATE };
     void updateOverlaySettings({
       ...overlaySettings,
       reminderIntervalMinutes: pendingReminderIntervalMinutes,
@@ -1259,6 +1281,6 @@ void loadOverlaySettings().then(() => {
     return;
   }
 
-  overlayState = INITIAL_VISIBLE_OVERLAY_STATE;
+  overlayState = { ...WAITING_OVERLAY_STATE };
   renderOverlay();
 });
