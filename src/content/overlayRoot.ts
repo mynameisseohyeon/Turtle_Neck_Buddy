@@ -8,8 +8,11 @@ import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/ove
 
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
 const OVERLAY_SETTINGS_STORAGE_KEY = "turtle-neck-buddy-overlay-settings";
-const IDLE_FRAME_INTERVAL_MS = 620;
+const IDLE_FRAME_INTERVAL_MS = 520;
+const PEEKING_FRAME_INTERVAL_MS = 180;
 const ALERT_FRAME_INTERVAL_MS = 90;
+const STRETCH_FRAME_INTERVAL_MS = 320;
+const SUCCESS_FRAME_INTERVAL_MS = 180;
 const REACTION_FRAME_INTERVAL_MS = 70;
 const DRAG_FRAME_INTERVAL_MS = 80;
 const NECK_REACTION_COOLDOWN_MS = 2400;
@@ -25,8 +28,9 @@ const MAX_TURTLE_SIZE = 80;
 const TURTLE_SIZE_SCALE_VERSION = 2;
 const BASE_TURTLE_WIDTH_PX = 166;
 const BASE_TURTLE_HEIGHT_PX = 263;
-const BASE_TURTLE_STAGE_WIDTH_PX = 340;
+const BASE_TURTLE_STAGE_WIDTH_PX = 470;
 const TURTLE_STAGE_HEADROOM_PX = 10;
+const MAX_TURTLE_FRAME_SCALE = 1.3;
 const EDGE_SNAP_THRESHOLD_PX = 24;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
 const OVERLAY_LANGUAGE_FLAGS: Record<OverlayLanguage, { flag: string; label: string }> = {
@@ -120,6 +124,32 @@ const FRAMES = {
     "assets/turtle/frames/success/success_03.png",
     "assets/turtle/frames/success/success_04.png"
   ]
+} as const;
+
+const PEEKING_AMBIENT_FRAMES = [
+  FRAMES.neckIn[7],
+  FRAMES.neckIn[7],
+  FRAMES.neckIn[7],
+  FRAMES.neckIn[6],
+  FRAMES.neckIn[5],
+  FRAMES.neckIn[4],
+  FRAMES.neckIn[3],
+  FRAMES.neckIn[3],
+  FRAMES.neckIn[3],
+  FRAMES.neckIn[4],
+  FRAMES.neckIn[5],
+  FRAMES.neckIn[6]
+];
+
+const FRAME_VISUAL_SCALES = {
+  idle: 1.3,
+  alert: 1.3,
+  drag: 1,
+  chinTuck: 0.91,
+  neckTilt: 1,
+  shoulderRoll: 0.95,
+  success: 1.18,
+  peeking: 1
 } as const;
 
 const OVERLAY_COPY: Record<
@@ -386,15 +416,58 @@ function applyTurtleSizeStyle(
   const turtleWidth = Math.round(BASE_TURTLE_WIDTH_PX * turtleSizeScale);
   const turtleHeight = Math.round(BASE_TURTLE_HEIGHT_PX * turtleSizeScale);
   const turtleStageWidth = Math.round(BASE_TURTLE_STAGE_WIDTH_PX * turtleSizeScale);
+  mascot.dataset.baseHeight = String(turtleHeight);
   mascot.style.width = "auto";
-  mascot.style.height = `${turtleHeight}px`;
   mascot.style.maxWidth = "none";
-  mascot.style.maxHeight = `${turtleHeight}px`;
+  mascot.style.maxHeight = "none";
+
+  if (mascot.dataset.framePath) {
+    applyMascotFrameSize(mascot, mascot.dataset.framePath);
+  } else {
+    mascot.style.height = `${turtleHeight}px`;
+  }
 
   if (mascotStage) {
     mascotStage.style.width = `${Math.max(turtleWidth, turtleStageWidth)}px`;
-    mascotStage.style.height = `${turtleHeight + TURTLE_STAGE_HEADROOM_PX}px`;
+    mascotStage.style.height = `${Math.round(turtleHeight * MAX_TURTLE_FRAME_SCALE) + TURTLE_STAGE_HEADROOM_PX}px`;
   }
+}
+
+function getMascotFrameScale(framePath: string) {
+  if (framePath.includes("/idle/")) {
+    return FRAME_VISUAL_SCALES.idle;
+  }
+
+  if (framePath.includes("/alert/")) {
+    return FRAME_VISUAL_SCALES.alert;
+  }
+
+  if (framePath.includes("/drag/")) {
+    return FRAME_VISUAL_SCALES.drag;
+  }
+
+  if (framePath.includes("/chin_tuck/")) {
+    return FRAME_VISUAL_SCALES.chinTuck;
+  }
+
+  if (framePath.includes("/neck_tilt/")) {
+    return FRAME_VISUAL_SCALES.neckTilt;
+  }
+
+  if (framePath.includes("/shoulder_roll/")) {
+    return FRAME_VISUAL_SCALES.shoulderRoll;
+  }
+
+  if (framePath.includes("/success/")) {
+    return FRAME_VISUAL_SCALES.success;
+  }
+
+  return FRAME_VISUAL_SCALES.peeking;
+}
+
+function applyMascotFrameSize(mascot: HTMLImageElement, framePath: string) {
+  const baseHeight = Number(mascot.dataset.baseHeight) || BASE_TURTLE_HEIGHT_PX;
+  mascot.style.height = `${Math.round(baseHeight * getMascotFrameScale(framePath))}px`;
 }
 
 function getOverlayCopy() {
@@ -417,8 +490,26 @@ function setMascotFrame(mascot: HTMLImageElement, framePath: string) {
     return false;
   }
 
+  mascot.dataset.framePath = framePath;
+  applyMascotFrameSize(mascot, framePath);
   mascot.src = frameUrl;
   return true;
+}
+
+function preloadMascotFrames() {
+  Object.values(FRAMES)
+    .flat()
+    .forEach((framePath) => {
+      const frameUrl = getRuntimeAssetUrl(framePath);
+
+      if (!frameUrl) {
+        return;
+      }
+
+      const image = new Image();
+      image.decoding = "async";
+      image.src = frameUrl;
+    });
 }
 
 function getDragFramePath(deltaX: number, deltaY: number) {
@@ -464,13 +555,21 @@ function getStretchPhaseFrames() {
   return FRAMES.shoulderRoll;
 }
 
+function createPingPongFrames<T>(frames: readonly T[]) {
+  if (frames.length < 3) {
+    return [...frames];
+  }
+
+  return [...frames, ...frames.slice(1, -1).reverse()];
+}
+
 function getAmbientFrames() {
   if (overlayState.visibilityState === "success") {
-    return FRAMES.success;
+    return createPingPongFrames(FRAMES.success);
   }
 
   if (overlayState.visibilityState === "stretch") {
-    return getStretchPhaseFrames();
+    return createPingPongFrames(getStretchPhaseFrames());
   }
 
   if (overlayState.visibilityState === "alert") {
@@ -481,7 +580,27 @@ function getAmbientFrames() {
     overlaySettings.customPosition !== null &&
     overlaySettings.customPosition.xPercent !== 0 &&
     overlaySettings.customPosition.xPercent !== 100;
-  return isFreelyPositioned ? FRAMES.idle : FRAMES.neckIn;
+  return isFreelyPositioned ? createPingPongFrames(FRAMES.idle) : PEEKING_AMBIENT_FRAMES;
+}
+
+function getAmbientFrameInterval() {
+  if (overlayState.visibilityState === "alert") {
+    return ALERT_FRAME_INTERVAL_MS;
+  }
+
+  if (overlayState.visibilityState === "stretch") {
+    return STRETCH_FRAME_INTERVAL_MS;
+  }
+
+  if (overlayState.visibilityState === "success") {
+    return SUCCESS_FRAME_INTERVAL_MS;
+  }
+
+  const isFreelyPositioned =
+    overlaySettings.customPosition !== null &&
+    overlaySettings.customPosition.xPercent !== 0 &&
+    overlaySettings.customPosition.xPercent !== 100;
+  return isFreelyPositioned ? IDLE_FRAME_INTERVAL_MS : PEEKING_FRAME_INTERVAL_MS;
 }
 
 function clearAmbientAnimation() {
@@ -641,13 +760,26 @@ function startStretchRoutine() {
       return;
     }
 
+    const previousPhaseIndex = getCurrentStretchPhaseIndex();
     const phaseIndex = Math.min(2, Math.floor((STRETCH_TOTAL_SECONDS - remainingSeconds) / STRETCH_PHASE_SECONDS));
     overlayState = {
       ...overlayState,
       message: getOverlayCopy().stretchPhases[phaseIndex].title,
       remainingSeconds
     };
-    renderOverlay();
+
+    if (phaseIndex !== previousPhaseIndex) {
+      renderOverlay();
+      return;
+    }
+
+    const timer = document
+      .getElementById(OVERLAY_HOST_ID)
+      ?.shadowRoot?.querySelector<HTMLElement>(".turtle-overlay-stretch-timer");
+
+    if (timer) {
+      timer.textContent = formatStopwatchSeconds(remainingSeconds);
+    }
   }, 1000);
 }
 
@@ -705,7 +837,7 @@ function startAmbientAnimation(mascot: HTMLImageElement) {
   clearAmbientAnimation();
 
   const frames = getAmbientFrames();
-  const interval = overlayState.visibilityState === "alert" ? ALERT_FRAME_INTERVAL_MS : IDLE_FRAME_INTERVAL_MS;
+  const interval = getAmbientFrameInterval();
   ambientFrameIndex = 0;
   if (!setMascotFrame(mascot, frames[ambientFrameIndex])) {
     return;
@@ -746,7 +878,7 @@ function playNeckReaction(mascot: HTMLImageElement) {
     return;
   }
 
-  const reactionFrames = [...FRAMES.neckIn, ...FRAMES.neckOut];
+  const reactionFrames = [...FRAMES.neckIn, ...[...FRAMES.neckOut].reverse()];
   let reactionFrameIndex = 0;
   isReacting = true;
   nextNeckReactionAt = now + NECK_REACTION_COOLDOWN_MS;
@@ -790,6 +922,52 @@ function createOverlayHost() {
   document.documentElement.append(host);
 
   return shadowRoot;
+}
+
+function keepMascotInsideViewport(
+  host: HTMLElement,
+  overlay: HTMLElement,
+  mascot: HTMLImageElement,
+  visibilityState: OverlayViewState["visibilityState"]
+) {
+  if (visibilityState === "hidden") {
+    return;
+  }
+
+  const mascotRect = mascot.getBoundingClientRect();
+  const allowsEdgePeeking = visibilityState === "peeking" && host.dataset.edgeSnapped !== "false";
+  let shiftX = 0;
+  let shiftY = 0;
+
+  if (!allowsEdgePeeking) {
+    if (mascotRect.left < 0) {
+      shiftX = -mascotRect.left;
+    } else if (mascotRect.right > window.innerWidth) {
+      shiftX = window.innerWidth - mascotRect.right;
+    }
+  }
+
+  if (mascotRect.top < 0) {
+    shiftY = -mascotRect.top;
+  } else if (mascotRect.bottom > window.innerHeight) {
+    shiftY = window.innerHeight - mascotRect.bottom;
+  }
+
+  if (shiftX === 0 && shiftY === 0) {
+    return;
+  }
+
+  const overlayRect = overlay.getBoundingClientRect();
+
+  if (shiftX !== 0) {
+    host.style.left = `${overlayRect.left + shiftX}px`;
+    host.style.right = "auto";
+  }
+
+  if (shiftY !== 0) {
+    host.style.top = `${overlayRect.top + shiftY}px`;
+    host.style.bottom = "auto";
+  }
 }
 
 function renderOverlay() {
@@ -965,6 +1143,13 @@ function renderOverlay() {
   overlay.append(mascotStage);
   shadowRoot.append(overlay);
 
+  const keepCurrentMascotInsideViewport = () => {
+    window.requestAnimationFrame(() => {
+      keepMascotInsideViewport(host, overlay, mascot, currentState);
+    });
+  };
+  mascot.addEventListener("load", keepCurrentMascotInsideViewport);
+
   if (overlaySettings.customPosition) {
     const bubbleHeight = bubble?.offsetHeight ?? 0;
     const stageWidth = mascotStage.offsetWidth;
@@ -999,6 +1184,7 @@ function renderOverlay() {
   }
 
   startAmbientAnimation(mascot);
+  keepCurrentMascotInsideViewport();
 }
 
 function showReminder() {
@@ -1340,6 +1526,7 @@ void loadOverlaySettings().then(() => {
     return;
   }
 
+  preloadMascotFrames();
   overlayState = { ...WAITING_OVERLAY_STATE };
   renderOverlay();
 });
