@@ -20,7 +20,7 @@
 .turtle-overlay {
   display: grid;
   justify-items: end;
-  width: 190px;
+  width: 340px;
   transform: translateX(54%);
   transition:
     opacity 180ms ease,
@@ -52,11 +52,11 @@
 
 .turtle-overlay[data-state="peeking"] {
   opacity: 1;
-  transform: translateX(18%);
+  transform: translateX(0);
 }
 
 :host([data-position="bottom-left"]) .turtle-overlay[data-state="peeking"] {
-  transform: translateX(-18%);
+  transform: translateX(0);
 }
 
 .turtle-overlay[data-state="alert"],
@@ -332,7 +332,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
-  width: 190px;
+  width: 340px;
   height: 286px;
   overflow: visible;
   pointer-events: auto;
