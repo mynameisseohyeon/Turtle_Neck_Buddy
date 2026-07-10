@@ -56,6 +56,12 @@ const WAITING_OVERLAY_STATE: OverlayViewState = {
 };
 
 const FRAMES = {
+  idle: [
+    "assets/turtle/frames/idle/idle_01.png",
+    "assets/turtle/frames/idle/idle_02.png",
+    "assets/turtle/frames/idle/idle_03.png",
+    "assets/turtle/frames/idle/idle_04.png"
+  ],
   neckIn: [
     "assets/turtle/frames/neck_in/neck_in_01.png",
     "assets/turtle/frames/neck_in/neck_in_02.png",
@@ -463,7 +469,15 @@ function getAmbientFrames() {
     return getStretchPhaseFrames();
   }
 
-  return overlayState.visibilityState === "alert" ? FRAMES.neckOut : FRAMES.neckIn;
+  if (overlayState.visibilityState === "alert") {
+    return FRAMES.neckOut;
+  }
+
+  const isFreelyPositioned =
+    overlaySettings.customPosition !== null &&
+    overlaySettings.customPosition.xPercent !== 0 &&
+    overlaySettings.customPosition.xPercent !== 100;
+  return isFreelyPositioned ? FRAMES.idle : FRAMES.neckIn;
 }
 
 function clearAmbientAnimation() {
