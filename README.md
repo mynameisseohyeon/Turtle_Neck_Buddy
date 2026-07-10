@@ -61,6 +61,25 @@ pnpm run build
 Chrome 확장 프로그램으로 확인하려면<br/>
 Chrome에서 `chrome://extensions`를 열고 Developer Mode를 켠 뒤,<br/>
 `dist/` 폴더를 Load unpacked로 불러옵니다.
+
+확장 프로그램을 로드한 뒤에는 일반 `http` 또는 `https` 페이지에서 Turtle Neck Buddy 아이콘을 눌러
+팝업을 열고, `현재 사이트 켜기`를 선택해야 해당 사이트에 거북이 오버레이를 띄울 수 있습니다.
+`chrome://extensions`, Chrome Web Store, 새 탭 같은 Chrome 내부 페이지에는 오버레이를 주입할 수 없습니다.
+
+배포용 ZIP 파일은 빌드 후 `dist/` 폴더의 내부 파일들을 압축해서 만듭니다.
+
+```bash
+pnpm run build
+cd dist
+zip -r ../turtle-neck-buddy-chrome.zip . -x "*.DS_Store"
+```
+
+Chrome Web Store 제출 전에는 다음 항목을 준비합니다.
+
+* 확장 프로그램 아이콘 및 스토어 스크린샷
+* 한 줄 설명과 상세 설명
+* 권한 사용 사유: 저장소, 알림, 알람, 현재 사이트 오버레이 주입
+* 개인정보 처리방침: 서버 전송 없이 로컬 저장만 사용한다는 내용
 <br/>
 <br/>
 
@@ -68,5 +87,3 @@ Chrome에서 `chrome://extensions`를 열고 Developer Mode를 켠 뒤,<br/>
 
 >본 프로젝트는 **의료용 애플리케이션이 아닙니다.** 자세 교정이나 통증 치료를 보장하지 않으며,<br/>
 >브라우저를 사용하는 동안 부담 없이 스트레칭 습관을 형성할 수 있도록 돕는 **단순 리마인더 위젯**입니다.
-
-
