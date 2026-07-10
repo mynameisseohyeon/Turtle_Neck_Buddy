@@ -25,9 +25,7 @@ const MAX_TURTLE_SIZE = 80;
 const TURTLE_SIZE_SCALE_VERSION = 2;
 const BASE_TURTLE_WIDTH_PX = 166;
 const BASE_TURTLE_HEIGHT_PX = 263;
-const BASE_TURTLE_STAGE_WIDTH_PX = 190;
-// Wide drag poses need a cap so their visual footprint matches the peeking turtle.
-const TURTLE_VISUAL_WIDTH_RATIO = 1.2;
+const BASE_TURTLE_STAGE_WIDTH_PX = 340;
 const TURTLE_STAGE_HEADROOM_PX = 10;
 const EDGE_SNAP_THRESHOLD_PX = 24;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
@@ -81,6 +79,12 @@ const FRAMES = {
     "assets/turtle/frames/neck_out/neck_out_06.png",
     "assets/turtle/frames/neck_out/neck_out_07.png",
     "assets/turtle/frames/neck_out/neck_out_08.png"
+  ],
+  alert: [
+    "assets/turtle/frames/alert/alert_01.png",
+    "assets/turtle/frames/alert/alert_02.png",
+    "assets/turtle/frames/alert/alert_03.png",
+    "assets/turtle/frames/alert/alert_04.png"
   ],
   drag: [
     "assets/turtle/frames/drag/drag_01.png",
@@ -381,14 +385,14 @@ function applyTurtleSizeStyle(
   const turtleSizeScale = 0.7 + (turtleSize - DEFAULT_TURTLE_SIZE) / 100;
   const turtleWidth = Math.round(BASE_TURTLE_WIDTH_PX * turtleSizeScale);
   const turtleHeight = Math.round(BASE_TURTLE_HEIGHT_PX * turtleSizeScale);
-  const turtleVisualMaxWidth = Math.round(turtleWidth * TURTLE_VISUAL_WIDTH_RATIO);
+  const turtleStageWidth = Math.round(BASE_TURTLE_STAGE_WIDTH_PX * turtleSizeScale);
   mascot.style.width = "auto";
   mascot.style.height = `${turtleHeight}px`;
-  mascot.style.maxWidth = `${turtleVisualMaxWidth}px`;
+  mascot.style.maxWidth = "none";
   mascot.style.maxHeight = `${turtleHeight}px`;
 
   if (mascotStage) {
-    mascotStage.style.width = `${Math.max(BASE_TURTLE_STAGE_WIDTH_PX, turtleVisualMaxWidth + 24)}px`;
+    mascotStage.style.width = `${Math.max(turtleWidth, turtleStageWidth)}px`;
     mascotStage.style.height = `${turtleHeight + TURTLE_STAGE_HEADROOM_PX}px`;
   }
 }
@@ -470,7 +474,7 @@ function getAmbientFrames() {
   }
 
   if (overlayState.visibilityState === "alert") {
-    return FRAMES.neckOut;
+    return FRAMES.alert;
   }
 
   const isFreelyPositioned =
@@ -834,6 +838,7 @@ function renderOverlay() {
   const mascotStage = document.createElement("div");
   mascotStage.className = "turtle-overlay-mascot-stage";
   applyTurtleSizeStyle(mascot, overlaySettings.turtleSize, mascotStage);
+  overlay.style.width = mascotStage.style.width;
   mascotStage.addEventListener("pointerenter", () => playNeckReaction(mascot));
   mascotStage.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) {
