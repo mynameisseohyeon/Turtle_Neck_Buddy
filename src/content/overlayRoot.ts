@@ -26,6 +26,8 @@ const TURTLE_SIZE_SCALE_VERSION = 2;
 const BASE_TURTLE_WIDTH_PX = 166;
 const BASE_TURTLE_HEIGHT_PX = 263;
 const BASE_TURTLE_STAGE_WIDTH_PX = 190;
+// Wide drag poses need a cap so their visual footprint matches the peeking turtle.
+const TURTLE_VISUAL_WIDTH_RATIO = 1.2;
 const TURTLE_STAGE_HEADROOM_PX = 10;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
 const OVERLAY_LANGUAGE_FLAGS: Record<OverlayLanguage, { flag: string; label: string }> = {
@@ -371,13 +373,14 @@ function applyTurtleSizeStyle(
   const turtleSizeScale = 0.7 + (turtleSize - DEFAULT_TURTLE_SIZE) / 100;
   const turtleWidth = Math.round(BASE_TURTLE_WIDTH_PX * turtleSizeScale);
   const turtleHeight = Math.round(BASE_TURTLE_HEIGHT_PX * turtleSizeScale);
+  const turtleVisualMaxWidth = Math.round(turtleWidth * TURTLE_VISUAL_WIDTH_RATIO);
   mascot.style.width = "auto";
   mascot.style.height = `${turtleHeight}px`;
-  mascot.style.maxWidth = "none";
-  mascot.style.maxHeight = "none";
+  mascot.style.maxWidth = `${turtleVisualMaxWidth}px`;
+  mascot.style.maxHeight = `${turtleHeight}px`;
 
   if (mascotStage) {
-    mascotStage.style.width = `${Math.max(BASE_TURTLE_STAGE_WIDTH_PX, turtleWidth + 32, Math.round(turtleHeight * 0.95))}px`;
+    mascotStage.style.width = `${Math.max(BASE_TURTLE_STAGE_WIDTH_PX, turtleVisualMaxWidth + 24)}px`;
     mascotStage.style.height = `${turtleHeight + TURTLE_STAGE_HEADROOM_PX}px`;
   }
 }
