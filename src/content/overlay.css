@@ -32,6 +32,15 @@
   transform: translateX(-54%);
 }
 
+:host([data-custom-position="true"][data-edge-snapped="false"]) .turtle-overlay,
+:host([data-custom-position="true"][data-edge-snapped="false"]) .turtle-overlay[data-state="hidden"],
+:host([data-custom-position="true"][data-edge-snapped="false"]) .turtle-overlay[data-state="peeking"],
+:host([data-custom-position="true"][data-edge-snapped="false"]) .turtle-overlay[data-state="alert"],
+:host([data-custom-position="true"][data-edge-snapped="false"]) .turtle-overlay[data-state="stretch"],
+:host([data-custom-position="true"][data-edge-snapped="false"]) .turtle-overlay[data-state="success"] {
+  transform: translateX(0);
+}
+
 .turtle-overlay[data-state="hidden"] {
   opacity: 0;
   transform: translateX(118%);

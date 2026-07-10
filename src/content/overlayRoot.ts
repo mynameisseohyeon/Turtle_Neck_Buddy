@@ -29,6 +29,7 @@ const BASE_TURTLE_STAGE_WIDTH_PX = 190;
 // Wide drag poses need a cap so their visual footprint matches the peeking turtle.
 const TURTLE_VISUAL_WIDTH_RATIO = 1.2;
 const TURTLE_STAGE_HEADROOM_PX = 10;
+const EDGE_SNAP_THRESHOLD_PX = 24;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
 const OVERLAY_LANGUAGE_FLAGS: Record<OverlayLanguage, { flag: string; label: string }> = {
   en: { flag: "🇺🇸", label: "English" },
@@ -288,6 +289,7 @@ let hasDragged = false;
 let didJustDrag = false;
 let dragOffset = { x: 0, y: 0 };
 let dragStart = { x: 0, y: 0 };
+let dragPosition = { x: 0, y: 0 };
 let lastDragFramePath: string = FRAMES.drag[4];
 let lastDragFrameChangedAt = 0;
 let nextNeckReactionAt = 0;
@@ -545,13 +547,25 @@ async function updateOverlaySettings(nextSettings: OverlaySettings) {
   renderOverlay();
 }
 
-async function saveCustomPositionFromPointer(pointerX: number, topY: number) {
-  const overlayPosition = pointerX < window.innerWidth / 2 ? "bottom-left" : "bottom-right";
-  const xPercent = overlayPosition === "bottom-left" ? 0 : 100;
-  const yPercent = (topY / window.innerHeight) * 100;
+function getEdgeSnapFromBounds(left: number, width: number): OverlaySettings["overlayPosition"] | null {
+  if (left <= EDGE_SNAP_THRESHOLD_PX) {
+    return "bottom-left";
+  }
+
+  if (left + width >= window.innerWidth - EDGE_SNAP_THRESHOLD_PX) {
+    return "bottom-right";
+  }
+
+  return null;
+}
+
+async function saveCustomPositionFromDrag(left: number, stageTop: number, width: number) {
+  const edgeSnap = getEdgeSnapFromBounds(left, width);
+  const xPercent = edgeSnap === "bottom-left" ? 0 : edgeSnap === "bottom-right" ? 100 : (left / window.innerWidth) * 100;
+  const yPercent = (stageTop / window.innerHeight) * 100;
   await updateOverlaySettings({
     ...overlaySettings,
-    overlayPosition,
+    overlayPosition: edgeSnap ?? overlaySettings.overlayPosition,
     customPosition: normalizeCustomPosition({ xPercent, yPercent })
   });
 }
@@ -773,18 +787,17 @@ function renderOverlay() {
 
   if (overlaySettings.customPosition) {
     host.dataset.customPosition = "true";
-    host.style.top = `${overlaySettings.customPosition.yPercent}%`;
-    host.style.bottom = "auto";
-
-    if (overlaySettings.overlayPosition === "bottom-left") {
-      host.style.left = "0";
-      host.style.right = "auto";
-    } else {
-      host.style.left = "auto";
-      host.style.right = "0";
-    }
+    const edgeSnap =
+      overlaySettings.customPosition.xPercent === 0
+        ? "bottom-left"
+        : overlaySettings.customPosition.xPercent === 100
+          ? "bottom-right"
+          : null;
+    host.dataset.edgeSnapped = String(edgeSnap !== null);
+    host.dataset.position = edgeSnap ?? overlaySettings.overlayPosition;
   } else {
     delete host.dataset.customPosition;
+    delete host.dataset.edgeSnapped;
     host.style.removeProperty("left");
     host.style.removeProperty("top");
     host.style.removeProperty("right");
@@ -813,7 +826,9 @@ function renderOverlay() {
       return;
     }
 
-    const hostRect = host.getBoundingClientRect();
+    host.dataset.edgeSnapped = "false";
+    const overlayRect = overlay.getBoundingClientRect();
+    const bubbleHeight = bubble?.offsetHeight ?? 0;
     isDragging = true;
     hasDragged = false;
     isReacting = false;
@@ -824,8 +839,8 @@ function renderOverlay() {
     lastDragFrameChangedAt = 0;
     setMascotFrame(mascot, lastDragFramePath);
     dragOffset = {
-      x: event.clientX - hostRect.left,
-      y: event.clientY - hostRect.top
+      x: event.clientX - overlayRect.left,
+      y: event.clientY - (overlayRect.top + bubbleHeight)
     };
     dragStart = {
       x: event.clientX,
@@ -846,14 +861,25 @@ function renderOverlay() {
 
     hasDragged = true;
     setDragFrame(mascot, event.clientX - dragStart.x, event.clientY - dragStart.y);
-    const x = Math.min(window.innerWidth - 24, Math.max(24, event.clientX - dragOffset.x));
-    const y = Math.min(window.innerHeight - 24, Math.max(24, event.clientY - dragOffset.y));
-    host.dataset.position = event.clientX < window.innerWidth / 2 ? "bottom-left" : "bottom-right";
+    const bubbleHeight = bubble?.offsetHeight ?? 0;
+    const stageWidth = mascotStage.offsetWidth;
+    const stageHeight = mascotStage.offsetHeight;
+    const x = Math.min(Math.max(0, window.innerWidth - stageWidth), Math.max(0, event.clientX - dragOffset.x));
+    const stageTop = Math.min(
+      Math.max(0, window.innerHeight - stageHeight),
+      Math.max(0, event.clientY - dragOffset.y)
+    );
+    const edgeSnap = getEdgeSnapFromBounds(x, stageWidth);
+    if (edgeSnap) {
+      host.dataset.position = edgeSnap;
+    }
+    host.dataset.edgeSnapped = String(edgeSnap !== null);
     host.dataset.customPosition = "true";
     host.style.left = `${x}px`;
-    host.style.top = `${y}px`;
+    host.style.top = `${stageTop - bubbleHeight}px`;
     host.style.right = "auto";
     host.style.bottom = "auto";
+    dragPosition = { x, y: stageTop };
   });
   mascotStage.addEventListener("pointerup", (event) => {
     if (!isDragging) {
@@ -872,7 +898,7 @@ function renderOverlay() {
 
     didJustDrag = true;
     startAmbientAnimation(mascot);
-    void saveCustomPositionFromPointer(event.clientX, event.clientY - dragOffset.y);
+    void saveCustomPositionFromDrag(dragPosition.x, dragPosition.y, mascotStage.offsetWidth);
     window.setTimeout(() => {
       didJustDrag = false;
     }, 0);
@@ -885,6 +911,7 @@ function renderOverlay() {
     openSettingsBubble();
   });
 
+  let bubble: HTMLDivElement | null = null;
   const shouldShowBubble =
     bubbleMode !== "reminder" ||
     currentState === "alert" ||
@@ -892,7 +919,7 @@ function renderOverlay() {
     currentState === "success";
 
   if (shouldShowBubble) {
-    const bubble = document.createElement("div");
+    bubble = document.createElement("div");
     bubble.className = "turtle-overlay-bubble";
 
     if (bubbleMode === "settings") {
@@ -918,6 +945,34 @@ function renderOverlay() {
   mascotStage.append(mascot);
   overlay.append(mascotStage);
   shadowRoot.append(overlay);
+
+  if (overlaySettings.customPosition) {
+    const bubbleHeight = bubble?.offsetHeight ?? 0;
+    const stageWidth = mascotStage.offsetWidth;
+    const stageHeight = mascotStage.offsetHeight;
+    const storedLeft = (overlaySettings.customPosition.xPercent / 100) * window.innerWidth;
+    const storedStageTop = (overlaySettings.customPosition.yPercent / 100) * window.innerHeight;
+    const stageTop = Math.min(
+      Math.max(0, window.innerHeight - stageHeight),
+      Math.max(bubbleHeight, storedStageTop)
+    );
+
+    if (host.dataset.edgeSnapped === "true") {
+      if (host.dataset.position === "bottom-left") {
+        host.style.left = "0";
+        host.style.right = "auto";
+      } else {
+        host.style.left = "auto";
+        host.style.right = "0";
+      }
+    } else {
+      host.style.left = `${Math.min(Math.max(0, window.innerWidth - stageWidth), Math.max(0, storedLeft))}px`;
+      host.style.right = "auto";
+    }
+
+    host.style.top = `${stageTop - bubbleHeight}px`;
+    host.style.bottom = "auto";
+  }
 
   if (currentState === "hidden") {
     setMascotFrame(mascot, FRAMES.neckIn[0]);
