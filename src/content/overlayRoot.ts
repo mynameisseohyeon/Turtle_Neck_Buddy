@@ -14,6 +14,9 @@ const ALERT_FRAME_INTERVAL_MS = 90;
 const REACTION_FRAME_INTERVAL_MS = 70;
 const DRAG_FRAME_INTERVAL_MS = 80;
 const NECK_REACTION_COOLDOWN_MS = 2400;
+const STRETCH_TOTAL_SECONDS = 30;
+const STRETCH_PHASE_SECONDS = 10;
+const SUCCESS_VISIBLE_MS = 3500;
 const MIN_REMINDER_INTERVAL_MINUTES = 10;
 const MAX_REMINDER_INTERVAL_MINUTES = 180;
 const REMINDER_INTERVAL_STEP_MINUTES = 10;
@@ -81,6 +84,29 @@ const FRAMES = {
     "assets/turtle/frames/drag/drag_07.png",
     "assets/turtle/frames/drag/drag_08.png",
     "assets/turtle/frames/drag/drag_09.png"
+  ],
+  chinTuck: [
+    "assets/turtle/frames/chin_tuck/chin_tuck_01.png",
+    "assets/turtle/frames/chin_tuck/chin_tuck_02.png",
+    "assets/turtle/frames/chin_tuck/chin_tuck_03.png",
+    "assets/turtle/frames/chin_tuck/chin_tuck_04.png"
+  ],
+  neckTilt: [
+    "assets/turtle/frames/neck_tilt/neck_tilt_01.png",
+    "assets/turtle/frames/neck_tilt/neck_tilt_02.png",
+    "assets/turtle/frames/neck_tilt/neck_tilt_03.png"
+  ],
+  shoulderRoll: [
+    "assets/turtle/frames/shoulder_roll/shoulder_roll_01.png",
+    "assets/turtle/frames/shoulder_roll/shoulder_roll_02.png",
+    "assets/turtle/frames/shoulder_roll/shoulder_roll_03.png",
+    "assets/turtle/frames/shoulder_roll/shoulder_roll_04.png"
+  ],
+  success: [
+    "assets/turtle/frames/success/success_01.png",
+    "assets/turtle/frames/success/success_02.png",
+    "assets/turtle/frames/success/success_03.png",
+    "assets/turtle/frames/success/success_04.png"
   ]
 } as const;
 
@@ -88,6 +114,14 @@ const OVERLAY_COPY: Record<
   OverlayLanguage,
   {
     reminder: string;
+    startStretchLabel: string;
+    stretchDoneLabel: string;
+    stretchSuccess: string;
+    stretchTimerLabel: string;
+    stretchPhases: Array<{
+      title: string;
+      guide: string;
+    }>;
     settingsTitle: string;
     enabledLabel: string;
     positionLabel: string;
@@ -106,6 +140,15 @@ const OVERLAY_COPY: Record<
 > = {
   en: {
     reminder: "Time to stretch!",
+    startStretchLabel: "Start 30s",
+    stretchDoneLabel: "Done",
+    stretchSuccess: "Nice posture!",
+    stretchTimerLabel: "Stretch",
+    stretchPhases: [
+      { title: "Chin tuck", guide: "Look forward and gently tuck your chin." },
+      { title: "Neck tilt", guide: "Relax shoulders and tilt your neck slowly." },
+      { title: "Shoulder roll", guide: "Open your chest and roll shoulders back." }
+    ],
     settingsTitle: "Stretch settings",
     enabledLabel: "Alert",
     positionLabel: "Side",
@@ -123,6 +166,15 @@ const OVERLAY_COPY: Record<
   },
   ko: {
     reminder: "스트레칭 시간이야!",
+    startStretchLabel: "30초 시작",
+    stretchDoneLabel: "완료",
+    stretchSuccess: "좋아요, 목이 한결 편해졌어요!",
+    stretchTimerLabel: "스트레칭",
+    stretchPhases: [
+      { title: "턱 당기기", guide: "시선은 정면, 턱은 살짝 뒤로 당겨요." },
+      { title: "목 좌우 기울이기", guide: "어깨는 내리고 목만 천천히 움직여요." },
+      { title: "어깨 뒤로 돌리기", guide: "가슴을 펴고 어깨를 뒤로 굴려요." }
+    ],
     settingsTitle: "스트레칭 설정",
     enabledLabel: "알림",
     positionLabel: "위치",
@@ -140,6 +192,15 @@ const OVERLAY_COPY: Record<
   },
   ja: {
     reminder: "ストレッチの時間だよ！",
+    startStretchLabel: "30秒開始",
+    stretchDoneLabel: "完了",
+    stretchSuccess: "いい姿勢です！",
+    stretchTimerLabel: "ストレッチ",
+    stretchPhases: [
+      { title: "あごを引く", guide: "正面を見て、あごをやさしく引きます。" },
+      { title: "首を傾ける", guide: "肩を下げて、首だけゆっくり動かします。" },
+      { title: "肩回し", guide: "胸を開いて、肩を後ろへ回します。" }
+    ],
     settingsTitle: "ストレッチ設定",
     enabledLabel: "通知",
     positionLabel: "位置",
@@ -157,6 +218,15 @@ const OVERLAY_COPY: Record<
   },
   zh: {
     reminder: "该伸展一下了！",
+    startStretchLabel: "开始30秒",
+    stretchDoneLabel: "完成",
+    stretchSuccess: "姿势好多了！",
+    stretchTimerLabel: "伸展",
+    stretchPhases: [
+      { title: "收下巴", guide: "看向前方，轻轻把下巴往后收。" },
+      { title: "左右侧颈", guide: "放松肩膀，慢慢倾斜脖子。" },
+      { title: "肩膀后绕", guide: "打开胸口，肩膀向后转动。" }
+    ],
     settingsTitle: "伸展设置",
     enabledLabel: "提醒",
     positionLabel: "位置",
@@ -174,6 +244,15 @@ const OVERLAY_COPY: Record<
   },
   es: {
     reminder: "Hora de estirarte!",
+    startStretchLabel: "30s inicio",
+    stretchDoneLabel: "Listo",
+    stretchSuccess: "Mejor postura!",
+    stretchTimerLabel: "Estira",
+    stretchPhases: [
+      { title: "Mentón atrás", guide: "Mira al frente y lleva el mentón atrás." },
+      { title: "Inclina cuello", guide: "Relaja hombros y mueve el cuello lento." },
+      { title: "Rueda hombros", guide: "Abre el pecho y rueda hombros atrás." }
+    ],
     settingsTitle: "Ajustes",
     enabledLabel: "Aviso",
     positionLabel: "Lado",
@@ -197,8 +276,11 @@ let bubbleMode: "reminder" | "settings" | "preferences" = "reminder";
 let ambientTimerId: number | undefined;
 let reactionTimerId: number | undefined;
 let settingsCountdownTimerId: number | undefined;
+let stretchTimerId: number | undefined;
+let successTimerId: number | undefined;
 let ambientFrameIndex = 0;
 let pendingReminderIntervalMinutes = DEFAULT_OVERLAY_SETTINGS.reminderIntervalMinutes;
+let stretchStartedAt = 0;
 let isReacting = false;
 let isDragging = false;
 let hasDragged = false;
@@ -348,6 +430,38 @@ function setDragFrame(mascot: HTMLImageElement, deltaX: number, deltaY: number) 
   setMascotFrame(mascot, nextFramePath);
 }
 
+function getCurrentStretchPhaseIndex() {
+  const remainingSeconds = overlayState.remainingSeconds ?? STRETCH_TOTAL_SECONDS;
+  const elapsedSeconds = STRETCH_TOTAL_SECONDS - remainingSeconds;
+  return Math.min(2, Math.max(0, Math.floor(elapsedSeconds / STRETCH_PHASE_SECONDS)));
+}
+
+function getStretchPhaseFrames() {
+  const phaseIndex = getCurrentStretchPhaseIndex();
+
+  if (phaseIndex === 0) {
+    return FRAMES.chinTuck;
+  }
+
+  if (phaseIndex === 1) {
+    return FRAMES.neckTilt;
+  }
+
+  return FRAMES.shoulderRoll;
+}
+
+function getAmbientFrames() {
+  if (overlayState.visibilityState === "success") {
+    return FRAMES.success;
+  }
+
+  if (overlayState.visibilityState === "stretch") {
+    return getStretchPhaseFrames();
+  }
+
+  return overlayState.visibilityState === "alert" ? FRAMES.neckOut : FRAMES.neckIn;
+}
+
 function clearAmbientAnimation() {
   if (ambientTimerId === undefined) {
     return;
@@ -375,11 +489,31 @@ function clearSettingsCountdown() {
   settingsCountdownTimerId = undefined;
 }
 
+function clearStretchTimer() {
+  if (stretchTimerId === undefined) {
+    return;
+  }
+
+  window.clearInterval(stretchTimerId);
+  stretchTimerId = undefined;
+}
+
+function clearSuccessTimer() {
+  if (successTimerId === undefined) {
+    return;
+  }
+
+  window.clearTimeout(successTimerId);
+  successTimerId = undefined;
+}
+
 function stopOverlayAfterContextInvalidated() {
   overlayStopped = true;
   clearReactionAnimation();
   clearAmbientAnimation();
   clearSettingsCountdown();
+  clearStretchTimer();
+  clearSuccessTimer();
   document.getElementById(OVERLAY_HOST_ID)?.remove();
 }
 
@@ -435,6 +569,58 @@ function closeSettingsBubble() {
   renderOverlay();
 }
 
+function startStretchRoutine() {
+  clearSuccessTimer();
+  clearStretchTimer();
+  clearReactionAnimation();
+  clearAmbientAnimation();
+  stretchStartedAt = Date.now();
+  const copy = getOverlayCopy();
+  overlayState = {
+    visibilityState: "stretch",
+    turtleState: "stretch",
+    message: copy.stretchPhases[0].title,
+    remainingSeconds: STRETCH_TOTAL_SECONDS
+  };
+  bubbleMode = "reminder";
+  renderOverlay();
+
+  stretchTimerId = window.setInterval(() => {
+    const elapsedSeconds = Math.floor((Date.now() - stretchStartedAt) / 1000);
+    const remainingSeconds = Math.max(0, STRETCH_TOTAL_SECONDS - elapsedSeconds);
+
+    if (remainingSeconds <= 0) {
+      completeStretchRoutine();
+      return;
+    }
+
+    const phaseIndex = Math.min(2, Math.floor((STRETCH_TOTAL_SECONDS - remainingSeconds) / STRETCH_PHASE_SECONDS));
+    overlayState = {
+      ...overlayState,
+      message: getOverlayCopy().stretchPhases[phaseIndex].title,
+      remainingSeconds
+    };
+    renderOverlay();
+  }, 1000);
+}
+
+function completeStretchRoutine() {
+  clearStretchTimer();
+  clearReactionAnimation();
+  clearAmbientAnimation();
+  clearSuccessTimer();
+  overlayState = {
+    visibilityState: "success",
+    turtleState: "success",
+    message: getOverlayCopy().stretchSuccess,
+    remainingSeconds: 0
+  };
+  renderOverlay();
+  successTimerId = window.setTimeout(() => {
+    hideOverlay();
+  }, SUCCESS_VISIBLE_MS);
+}
+
 function formatStopwatchSeconds(totalSeconds: number) {
   const boundedSeconds = Math.max(0, Math.floor(totalSeconds));
   const minutes = Math.floor(boundedSeconds / 60);
@@ -471,7 +657,7 @@ function startAmbientAnimation(mascot: HTMLImageElement) {
 
   clearAmbientAnimation();
 
-  const frames = overlayState.visibilityState === "alert" ? FRAMES.neckOut : FRAMES.neckIn;
+  const frames = getAmbientFrames();
   const interval = overlayState.visibilityState === "alert" ? ALERT_FRAME_INTERVAL_MS : IDLE_FRAME_INTERVAL_MS;
   ambientFrameIndex = 0;
   if (!setMascotFrame(mascot, frames[ambientFrameIndex])) {
@@ -502,7 +688,14 @@ function playNeckReaction(mascot: HTMLImageElement) {
 
   const now = Date.now();
 
-  if (isDragging || isReacting || now < nextNeckReactionAt || overlayState.visibilityState === "hidden") {
+  if (
+    isDragging ||
+    isReacting ||
+    now < nextNeckReactionAt ||
+    overlayState.visibilityState === "hidden" ||
+    overlayState.visibilityState === "stretch" ||
+    overlayState.visibilityState === "success"
+  ) {
     return;
   }
 
@@ -679,12 +872,15 @@ function renderOverlay() {
   } else if (bubbleMode === "preferences") {
     bubble.dataset.mode = "settings";
     bubble.append(createPreferencesBubbleContent());
+  } else if (currentState === "stretch") {
+    bubble.dataset.mode = "stretch";
+    bubble.append(createStretchBubbleContent());
+  } else if (currentState === "success") {
+    bubble.dataset.mode = "stretch";
+    bubble.append(createSuccessBubbleContent());
   } else {
-    bubble.textContent = overlayState.message || getOverlayCopy().reminder;
-    bubble.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openSettingsBubble();
-    });
+    bubble.dataset.mode = "action";
+    bubble.append(createReminderBubbleContent());
   }
 
   mascotStage.append(mascot);
@@ -719,6 +915,8 @@ function hideOverlay() {
 
   clearReactionAnimation();
   clearAmbientAnimation();
+  clearStretchTimer();
+  clearSuccessTimer();
   isReacting = false;
   overlayState = {
     ...overlayState,
@@ -853,6 +1051,83 @@ function createSettingsBubbleContent() {
   );
 
   return settings;
+}
+
+function createReminderBubbleContent() {
+  const copy = getOverlayCopy();
+  const content = document.createElement("div");
+  content.className = "turtle-overlay-reminder";
+
+  const message = document.createElement("span");
+  message.className = "turtle-overlay-reminder-text";
+  message.textContent = overlayState.message || copy.reminder;
+  message.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openSettingsBubble();
+  });
+
+  const startButton = document.createElement("button");
+  startButton.type = "button";
+  startButton.className = "turtle-overlay-primary-button";
+  startButton.textContent = copy.startStretchLabel;
+  startButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    startStretchRoutine();
+  });
+
+  content.append(message, startButton);
+
+  return content;
+}
+
+function createStretchBubbleContent() {
+  const copy = getOverlayCopy();
+  const phaseIndex = getCurrentStretchPhaseIndex();
+  const phase = copy.stretchPhases[phaseIndex];
+  const content = document.createElement("div");
+  content.className = "turtle-overlay-stretch";
+
+  const timerLabel = document.createElement("span");
+  timerLabel.className = "turtle-overlay-settings-label";
+  timerLabel.textContent = copy.stretchTimerLabel;
+
+  const timerValue = document.createElement("strong");
+  timerValue.className = "turtle-overlay-stretch-timer";
+  timerValue.textContent = formatStopwatchSeconds(overlayState.remainingSeconds ?? STRETCH_TOTAL_SECONDS);
+
+  const title = document.createElement("strong");
+  title.className = "turtle-overlay-stretch-title";
+  title.textContent = phase.title;
+
+  const guide = document.createElement("span");
+  guide.className = "turtle-overlay-stretch-guide";
+  guide.textContent = phase.guide;
+
+  const doneButton = document.createElement("button");
+  doneButton.type = "button";
+  doneButton.className = "turtle-overlay-primary-button";
+  doneButton.disabled = (overlayState.remainingSeconds ?? STRETCH_TOTAL_SECONDS) > 0;
+  doneButton.textContent = copy.stretchDoneLabel;
+  doneButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    completeStretchRoutine();
+  });
+
+  content.append(timerLabel, timerValue, title, guide, doneButton);
+
+  return content;
+}
+
+function createSuccessBubbleContent() {
+  const content = document.createElement("div");
+  content.className = "turtle-overlay-reminder";
+
+  const message = document.createElement("span");
+  message.className = "turtle-overlay-reminder-text";
+  message.textContent = overlayState.message || getOverlayCopy().stretchSuccess;
+  content.append(message);
+
+  return content;
 }
 
 function createPreferencesBubbleContent() {
