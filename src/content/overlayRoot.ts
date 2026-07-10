@@ -349,7 +349,7 @@ function normalizeCustomPosition(value: unknown) {
   }
 
   return {
-    xPercent: Math.min(95, Math.max(5, candidate.xPercent)),
+    xPercent: Math.min(100, Math.max(0, candidate.xPercent)),
     yPercent: Math.min(95, Math.max(5, candidate.yPercent))
   };
 }
@@ -542,11 +542,13 @@ async function updateOverlaySettings(nextSettings: OverlaySettings) {
   renderOverlay();
 }
 
-async function saveCustomPositionFromPointer(clientX: number, clientY: number) {
-  const xPercent = (clientX / window.innerWidth) * 100;
-  const yPercent = (clientY / window.innerHeight) * 100;
+async function saveCustomPositionFromPointer(pointerX: number, topY: number) {
+  const overlayPosition = pointerX < window.innerWidth / 2 ? "bottom-left" : "bottom-right";
+  const xPercent = overlayPosition === "bottom-left" ? 0 : 100;
+  const yPercent = (topY / window.innerHeight) * 100;
   await updateOverlaySettings({
     ...overlaySettings,
+    overlayPosition,
     customPosition: normalizeCustomPosition({ xPercent, yPercent })
   });
 }
@@ -768,10 +770,16 @@ function renderOverlay() {
 
   if (overlaySettings.customPosition) {
     host.dataset.customPosition = "true";
-    host.style.left = `${overlaySettings.customPosition.xPercent}%`;
     host.style.top = `${overlaySettings.customPosition.yPercent}%`;
-    host.style.right = "auto";
     host.style.bottom = "auto";
+
+    if (overlaySettings.overlayPosition === "bottom-left") {
+      host.style.left = "0";
+      host.style.right = "auto";
+    } else {
+      host.style.left = "auto";
+      host.style.right = "0";
+    }
   } else {
     delete host.dataset.customPosition;
     host.style.removeProperty("left");
@@ -837,6 +845,7 @@ function renderOverlay() {
     setDragFrame(mascot, event.clientX - dragStart.x, event.clientY - dragStart.y);
     const x = Math.min(window.innerWidth - 24, Math.max(24, event.clientX - dragOffset.x));
     const y = Math.min(window.innerHeight - 24, Math.max(24, event.clientY - dragOffset.y));
+    host.dataset.position = event.clientX < window.innerWidth / 2 ? "bottom-left" : "bottom-right";
     host.dataset.customPosition = "true";
     host.style.left = `${x}px`;
     host.style.top = `${y}px`;
@@ -860,7 +869,7 @@ function renderOverlay() {
 
     didJustDrag = true;
     startAmbientAnimation(mascot);
-    void saveCustomPositionFromPointer(event.clientX - dragOffset.x, event.clientY - dragOffset.y);
+    void saveCustomPositionFromPointer(event.clientX, event.clientY - dragOffset.y);
     window.setTimeout(() => {
       didJustDrag = false;
     }, 0);
@@ -970,31 +979,6 @@ function createSettingsBubbleContent() {
     });
   });
 
-  const positionLabel = document.createElement("span");
-  positionLabel.className = "turtle-overlay-settings-label";
-  positionLabel.textContent = copy.positionLabel;
-
-  const positionGroup = document.createElement("div");
-  positionGroup.className = "turtle-overlay-segment";
-  [
-    { label: copy.left, value: "bottom-left" },
-    { label: copy.right, value: "bottom-right" }
-  ].forEach((option) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "turtle-overlay-segment-button";
-    button.dataset.active = String(overlaySettings.overlayPosition === option.value);
-    button.textContent = option.label;
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      void updateOverlaySettings({
-        ...overlaySettings,
-        overlayPosition: option.value as OverlaySettings["overlayPosition"]
-      });
-    });
-    positionGroup.append(button);
-  });
-
   const intervalLabel = document.createElement("span");
   intervalLabel.className = "turtle-overlay-settings-label";
   intervalLabel.textContent = copy.intervalLabel;
@@ -1063,8 +1047,6 @@ function createSettingsBubbleContent() {
     header,
     enabledLabel,
     enabledButton,
-    positionLabel,
-    positionGroup,
     intervalLabel,
     intervalGroup,
     nextLabel,

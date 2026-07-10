@@ -53,7 +53,7 @@ function normalizeCustomPosition(value: unknown): OverlayCustomPosition | null {
   }
 
   return {
-    xPercent: Math.min(95, Math.max(5, candidate.xPercent)),
+    xPercent: Math.min(100, Math.max(0, candidate.xPercent)),
     yPercent: Math.min(95, Math.max(5, candidate.yPercent))
   };
 }
