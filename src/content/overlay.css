@@ -99,6 +99,12 @@
   white-space: normal;
 }
 
+.turtle-overlay-bubble[data-mode="action"],
+.turtle-overlay-bubble[data-mode="stretch"] {
+  min-width: 148px;
+  white-space: normal;
+}
+
 .turtle-overlay-bubble::after {
   position: absolute;
   right: 14px;
@@ -146,6 +152,7 @@
 .turtle-overlay-segment-button,
 .turtle-overlay-stepper-button,
 .turtle-overlay-ok-button,
+.turtle-overlay-primary-button,
 .turtle-overlay-preferences-button,
 .turtle-overlay-flag-button,
 .turtle-overlay-close-button {
@@ -234,9 +241,50 @@
   color: #fffdf7;
 }
 
+.turtle-overlay-primary-button {
+  width: 100%;
+  min-height: 26px;
+  padding: 0 8px;
+  background: #ffd769;
+  color: #213329;
+  box-shadow: 2px 2px 0 #213329;
+}
+
+.turtle-overlay-primary-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .turtle-overlay-next-countdown {
   justify-self: start;
   font-size: 11px;
+}
+
+.turtle-overlay-reminder,
+.turtle-overlay-stretch {
+  display: grid;
+  gap: 7px;
+}
+
+.turtle-overlay-reminder-text,
+.turtle-overlay-stretch-guide {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.turtle-overlay-stretch {
+  min-width: 164px;
+}
+
+.turtle-overlay-stretch-timer {
+  font-size: 18px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.turtle-overlay-stretch-title {
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .turtle-overlay-preferences-button {
