@@ -26,6 +26,10 @@ const DEFAULT_TURTLE_SIZE = 50;
 const MIN_TURTLE_SIZE = 20;
 const MAX_TURTLE_SIZE = 80;
 const TURTLE_SIZE_SCALE_VERSION = 2;
+const DEFAULT_OVERLAY_CUSTOM_POSITION = {
+  xPercent: 100,
+  yPercent: 18
+};
 const BASE_TURTLE_WIDTH_PX = 166;
 const BASE_TURTLE_HEIGHT_PX = 263;
 const BASE_TURTLE_STAGE_WIDTH_PX = 470;
@@ -47,7 +51,7 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   language: "en",
   turtleSize: DEFAULT_TURTLE_SIZE,
   turtleSizeScaleVersion: TURTLE_SIZE_SCALE_VERSION,
-  customPosition: null,
+  customPosition: DEFAULT_OVERLAY_CUSTOM_POSITION,
   lastReminderShownAt: null,
   excludedHostnames: []
 };
@@ -357,7 +361,7 @@ function normalizeOverlaySettings(value: unknown): OverlaySettings {
     language: isOverlayLanguage(candidate.language) ? candidate.language : DEFAULT_OVERLAY_SETTINGS.language,
     turtleSize: normalizeTurtleSize(candidate.turtleSize, candidate.turtleSizeScaleVersion),
     turtleSizeScaleVersion: TURTLE_SIZE_SCALE_VERSION,
-    customPosition: normalizeCustomPosition(candidate.customPosition),
+    customPosition: normalizeCustomPosition(candidate.customPosition) ?? DEFAULT_OVERLAY_SETTINGS.customPosition,
     lastReminderShownAt:
       typeof candidate.lastReminderShownAt === "string"
         ? candidate.lastReminderShownAt

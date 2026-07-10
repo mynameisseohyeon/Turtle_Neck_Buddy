@@ -90,16 +90,26 @@ export function App() {
     setPermissionStatus("requesting");
     setOverlayFeedback("");
 
-    void chrome.permissions
-      .request({ origins: [permissionState.origin] })
-      .then((granted) => {
-      setOverlayFeedback(granted ? "현재 사이트에서 거북이 오버레이를 사용할 수 있어요." : "권한 요청이 취소됐어요.");
+    try {
+      const granted = await chrome.permissions.request({ origins: [permissionState.origin] });
+
+      if (!granted) {
+        setOverlayFeedback("권한 요청이 취소됐어요.");
+        void refreshPermissionState();
+        return;
+      }
+
+      const response = await sendBackgroundMessage({ type: "PREVIEW_OVERLAY_ON_CURRENT_TAB" });
+      setOverlayFeedback(
+        response.type === "OVERLAY_PREVIEW_RESULT" && response.payload.ok
+          ? "현재 사이트에 거북이 오버레이를 띄웠어요."
+          : "권한은 켰지만 오버레이를 띄우지 못했어요. 페이지를 새로고침한 뒤 다시 눌러주세요."
+      );
       void refreshPermissionState();
-      })
-      .catch(() => {
-        setOverlayFeedback("권한 요청을 완료하지 못했어요.");
-        setPermissionStatus("idle");
-      });
+    } catch {
+      setOverlayFeedback("권한 요청을 완료하지 못했어요.");
+      setPermissionStatus("idle");
+    }
   };
 
   const handlePreviewOverlay = async () => {
