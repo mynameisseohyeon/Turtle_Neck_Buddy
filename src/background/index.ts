@@ -65,23 +65,53 @@ async function saveDefaultOverlaySettings() {
     return getOverlaySettings();
   }
 
-  await chrome.storage.local.set({
-    [OVERLAY_SETTINGS_STORAGE_KEY]: DEFAULT_OVERLAY_SETTINGS
-  });
+  const settings = {
+    ...DEFAULT_OVERLAY_SETTINGS,
+    nextReminderAt: new Date(Date.now() + DEFAULT_REMINDER_INTERVAL_MINUTES * 60 * 1000).toISOString()
+  };
+  await chrome.storage.local.set({ [OVERLAY_SETTINGS_STORAGE_KEY]: settings });
 
-  return DEFAULT_OVERLAY_SETTINGS;
+  return settings;
 }
 
-function scheduleReminderAlarm(intervalMinutes: number) {
+function scheduleReminderAlarm(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
+  const nextReminderAt = settings.nextReminderAt ? Date.parse(settings.nextReminderAt) : Number.NaN;
+  const delayInMinutes = Number.isFinite(nextReminderAt)
+    ? Math.max(1 / 60, (nextReminderAt - Date.now()) / 60_000)
+    : settings.reminderIntervalMinutes;
   void chrome.alarms.create(REMINDER_ALARM_NAME, {
-    delayInMinutes: intervalMinutes,
-    periodInMinutes: intervalMinutes
+    delayInMinutes,
+    periodInMinutes: settings.reminderIntervalMinutes
   });
+}
+
+function isInDoNotDisturbWindow(settings: Awaited<ReturnType<typeof getOverlaySettings>>, now = new Date()) {
+  const toMinutes = (value: string) => {
+    const [hours, minutes] = value.split(":").map(Number);
+    return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : null;
+  };
+  const start = toMinutes(settings.doNotDisturbStart);
+  const end = toMinutes(settings.doNotDisturbEnd);
+  if (start === null || end === null || start === end) {
+    return false;
+  }
+
+  const current = now.getHours() * 60 + now.getMinutes();
+  return start < end ? current >= start && current < end : current >= start || current < end;
 }
 
 function canShowReminder(settings: Awaited<ReturnType<typeof getOverlaySettings>>, now = Date.now()) {
   if (!settings.overlayEnabled) {
     return false;
+  }
+
+  if (isInDoNotDisturbWindow(settings, new Date(now))) {
+    return false;
+  }
+
+  if (settings.nextReminderAt) {
+    const nextReminderAt = Date.parse(settings.nextReminderAt);
+    return !Number.isFinite(nextReminderAt) || now >= nextReminderAt;
   }
 
   if (!settings.lastReminderShownAt) {
@@ -101,9 +131,28 @@ async function markReminderShown(settings: Awaited<ReturnType<typeof getOverlayS
   await chrome.storage.local.set({
     [OVERLAY_SETTINGS_STORAGE_KEY]: {
       ...settings,
-      lastReminderShownAt: now.toISOString()
+      lastReminderShownAt: now.toISOString(),
+      nextReminderAt: new Date(now.getTime() + settings.reminderIntervalMinutes * 60 * 1000).toISOString()
     }
   });
+}
+
+async function snoozeReminder(snoozeMinutes: number, tabId?: number) {
+  const settings = await getOverlaySettings();
+  const nextSettings = {
+    ...settings,
+    nextReminderAt: new Date(Date.now() + snoozeMinutes * 60 * 1000).toISOString()
+  };
+  await chrome.storage.local.set({ [OVERLAY_SETTINGS_STORAGE_KEY]: nextSettings });
+  scheduleReminderAlarm(nextSettings);
+
+  if (tabId) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: "HIDE_STRETCH_REMINDER" } satisfies BackgroundToOverlayMessage);
+    } catch {
+      // The overlay can already be gone when the page navigated during snooze.
+    }
+  }
 }
 
 async function getCurrentSiteOverlayPermission(): Promise<CurrentSiteOverlayPermissionState> {
@@ -221,7 +270,7 @@ async function showOverlayFromActionClick(tab: chrome.tabs.Tab) {
 
 chrome.runtime.onInstalled.addListener(() => {
   void saveDefaultOverlaySettings().then((settings) => {
-    scheduleReminderAlarm(settings.reminderIntervalMinutes);
+    scheduleReminderAlarm(settings);
   });
 });
 
@@ -251,7 +300,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   const settings = normalizeOverlaySettings(changes[OVERLAY_SETTINGS_STORAGE_KEY].newValue);
   void chrome.alarms.clear(REMINDER_ALARM_NAME, () => {
     if (settings.overlayEnabled) {
-      scheduleReminderAlarm(settings.reminderIntervalMinutes || DEFAULT_REMINDER_INTERVAL_MINUTES);
+      scheduleReminderAlarm(settings);
     }
   });
 });
@@ -273,6 +322,21 @@ chrome.runtime.onMessage.addListener((message: PopupToBackgroundMessage, _sender
         type: "OVERLAY_PREVIEW_RESULT",
         payload
       });
+    });
+    return true;
+  }
+
+  if (message.type === "RESCHEDULE_STRETCH_REMINDER") {
+    void getOverlaySettings().then((settings) => {
+      scheduleReminderAlarm(settings);
+      sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload: { ok: true } });
+    });
+    return true;
+  }
+
+  if (message.type === "SNOOZE_STRETCH_REMINDER") {
+    void snoozeReminder(message.payload.snoozeMinutes, _sender.tab?.id).then(() => {
+      sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload: { ok: true } });
     });
     return true;
   }

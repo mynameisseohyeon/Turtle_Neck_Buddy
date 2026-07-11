@@ -5,6 +5,11 @@ import type {
   OverlaySettings,
 } from "../shared/overlayMessages";
 import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/overlayState";
+import {
+  addStretchCompletion,
+  normalizeStretchRecords,
+  STRETCH_RECORDS_STORAGE_KEY
+} from "../shared/stretchRecords";
 
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
 const OVERLAY_SETTINGS_STORAGE_KEY = "turtle-neck-buddy-overlay-settings";
@@ -58,10 +63,14 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   turtleSizeScaleVersion: TURTLE_SIZE_SCALE_VERSION,
   customPosition: DEFAULT_OVERLAY_CUSTOM_POSITION,
   lastReminderShownAt: null,
+  nextReminderAt: null,
+  doNotDisturbStart: "22:00",
+  doNotDisturbEnd: "08:00",
+  quietMode: false,
   excludedHostnames: []
 };
 const WAITING_OVERLAY_STATE: OverlayViewState = {
-  visibilityState: "peeking",
+  visibilityState: "hidden",
   turtleState: "idle",
   message: ""
 };
@@ -184,6 +193,7 @@ const OVERLAY_COPY: Record<
   {
     reminder: string;
     startStretchLabel: string;
+    snoozeLabel: string;
     stretchDoneLabel: string;
     stretchSuccess: string;
     stretchTimerLabel: string;
@@ -210,6 +220,7 @@ const OVERLAY_COPY: Record<
   en: {
     reminder: "Time to stretch!",
     startStretchLabel: "Start 30s",
+    snoozeLabel: "In 5 min",
     stretchDoneLabel: "Done",
     stretchSuccess: "Nice posture!",
     stretchTimerLabel: "Stretch",
@@ -234,8 +245,9 @@ const OVERLAY_COPY: Record<
     minutes: "min"
   },
   ko: {
-    reminder: "스트레칭 시간이야!",
+    reminder: "스트레칭 할 시간이에요!",
     startStretchLabel: "30초 시작",
+    snoozeLabel: "5분 뒤 알림",
     stretchDoneLabel: "완료",
     stretchSuccess: "좋아요, 목이 한결 편해졌어요!",
     stretchTimerLabel: "스트레칭",
@@ -262,6 +274,7 @@ const OVERLAY_COPY: Record<
   ja: {
     reminder: "ストレッチの時間だよ！",
     startStretchLabel: "30秒開始",
+    snoozeLabel: "5分後",
     stretchDoneLabel: "完了",
     stretchSuccess: "いい姿勢です！",
     stretchTimerLabel: "ストレッチ",
@@ -288,6 +301,7 @@ const OVERLAY_COPY: Record<
   zh: {
     reminder: "该伸展一下了！",
     startStretchLabel: "开始30秒",
+    snoozeLabel: "5分钟后",
     stretchDoneLabel: "完成",
     stretchSuccess: "姿势好多了！",
     stretchTimerLabel: "伸展",
@@ -314,6 +328,7 @@ const OVERLAY_COPY: Record<
   es: {
     reminder: "Hora de estirarte!",
     startStretchLabel: "30s inicio",
+    snoozeLabel: "En 5 min",
     stretchDoneLabel: "Listo",
     stretchSuccess: "Mejor postura!",
     stretchTimerLabel: "Estira",
@@ -395,6 +410,20 @@ function normalizeOverlaySettings(value: unknown): OverlaySettings {
       typeof candidate.lastReminderShownAt === "string"
         ? candidate.lastReminderShownAt
         : DEFAULT_OVERLAY_SETTINGS.lastReminderShownAt,
+    nextReminderAt:
+      typeof candidate.nextReminderAt === "string"
+        ? candidate.nextReminderAt
+        : DEFAULT_OVERLAY_SETTINGS.nextReminderAt,
+    doNotDisturbStart:
+      typeof candidate.doNotDisturbStart === "string"
+        ? candidate.doNotDisturbStart
+        : DEFAULT_OVERLAY_SETTINGS.doNotDisturbStart,
+    doNotDisturbEnd:
+      typeof candidate.doNotDisturbEnd === "string"
+        ? candidate.doNotDisturbEnd
+        : DEFAULT_OVERLAY_SETTINGS.doNotDisturbEnd,
+    quietMode:
+      typeof candidate.quietMode === "boolean" ? candidate.quietMode : DEFAULT_OVERLAY_SETTINGS.quietMode,
     excludedHostnames: Array.isArray(candidate.excludedHostnames)
       ? candidate.excludedHostnames.filter((hostname) => typeof hostname === "string")
       : DEFAULT_OVERLAY_SETTINGS.excludedHostnames
@@ -904,10 +933,23 @@ function completeStretchRoutine() {
     message: getOverlayCopy().stretchSuccess,
     remainingSeconds: 0
   };
+  void recordStretchCompletion();
   renderOverlay();
   successTimerId = window.setTimeout(() => {
     returnToWaitingState();
   }, SUCCESS_VISIBLE_MS);
+}
+
+async function recordStretchCompletion() {
+  try {
+    const stored = await chrome.storage.local.get(STRETCH_RECORDS_STORAGE_KEY);
+    const records = normalizeStretchRecords(stored[STRETCH_RECORDS_STORAGE_KEY]);
+    await chrome.storage.local.set({
+      [STRETCH_RECORDS_STORAGE_KEY]: addStretchCompletion(records)
+    });
+  } catch {
+    stopOverlayAfterContextInvalidated();
+  }
 }
 
 function formatStopwatchSeconds(totalSeconds: number) {
@@ -918,6 +960,13 @@ function formatStopwatchSeconds(totalSeconds: number) {
 }
 
 function getRemainingReminderSeconds() {
+  if (overlaySettings.nextReminderAt) {
+    const nextReminderAt = Date.parse(overlaySettings.nextReminderAt);
+    if (Number.isFinite(nextReminderAt)) {
+      return Math.max(0, Math.floor((nextReminderAt - Date.now()) / 1000));
+    }
+  }
+
   if (!overlaySettings.lastReminderShownAt) {
     return overlaySettings.reminderIntervalMinutes * 60;
   }
@@ -1501,7 +1550,8 @@ function createSettingsBubbleContent() {
     void updateOverlaySettings({
       ...overlaySettings,
       reminderIntervalMinutes: pendingReminderIntervalMinutes,
-      lastReminderShownAt: new Date().toISOString()
+      lastReminderShownAt: new Date().toISOString(),
+      nextReminderAt: new Date(Date.now() + pendingReminderIntervalMinutes * 60_000).toISOString()
     });
   });
   intervalGroup.append(decreaseButton, intervalValue, increaseButton, confirmButton);
@@ -1559,7 +1609,24 @@ function createReminderBubbleContent() {
     startStretchRoutine();
   });
 
-  content.append(message, startButton);
+  const snoozeButton = document.createElement("button");
+  snoozeButton.type = "button";
+  snoozeButton.className = "turtle-overlay-secondary-button";
+  snoozeButton.textContent = copy.snoozeLabel;
+  snoozeButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    hideOverlay();
+    try {
+      void chrome.runtime.sendMessage({
+        type: "SNOOZE_STRETCH_REMINDER",
+        payload: { snoozeMinutes: 5 }
+      });
+    } catch {
+      stopOverlayAfterContextInvalidated();
+    }
+  });
+
+  content.append(message, startButton, snoozeButton);
 
   return content;
 }

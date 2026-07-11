@@ -25,6 +25,10 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   turtleSizeScaleVersion: TURTLE_SIZE_SCALE_VERSION,
   customPosition: DEFAULT_OVERLAY_CUSTOM_POSITION,
   lastReminderShownAt: null,
+  nextReminderAt: null,
+  doNotDisturbStart: "22:00",
+  doNotDisturbEnd: "08:00",
+  quietMode: false,
   excludedHostnames: []
 };
 
@@ -95,6 +99,20 @@ export function normalizeOverlaySettings(value: unknown): OverlaySettings {
       typeof candidate.lastReminderShownAt === "string"
         ? candidate.lastReminderShownAt
         : DEFAULT_OVERLAY_SETTINGS.lastReminderShownAt,
+    nextReminderAt:
+      typeof candidate.nextReminderAt === "string"
+        ? candidate.nextReminderAt
+        : DEFAULT_OVERLAY_SETTINGS.nextReminderAt,
+    doNotDisturbStart:
+      typeof candidate.doNotDisturbStart === "string"
+        ? candidate.doNotDisturbStart
+        : DEFAULT_OVERLAY_SETTINGS.doNotDisturbStart,
+    doNotDisturbEnd:
+      typeof candidate.doNotDisturbEnd === "string"
+        ? candidate.doNotDisturbEnd
+        : DEFAULT_OVERLAY_SETTINGS.doNotDisturbEnd,
+    quietMode:
+      typeof candidate.quietMode === "boolean" ? candidate.quietMode : DEFAULT_OVERLAY_SETTINGS.quietMode,
     excludedHostnames: Array.isArray(candidate.excludedHostnames)
       ? candidate.excludedHostnames.filter((hostname) => typeof hostname === "string")
       : DEFAULT_OVERLAY_SETTINGS.excludedHostnames
