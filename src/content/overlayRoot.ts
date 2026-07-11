@@ -99,6 +99,14 @@ const FRAMES = {
     "assets/turtle/frames/alert/alert_03.png",
     "assets/turtle/frames/alert/alert_04.png"
   ],
+  tired: [
+    "assets/turtle/frames/tired/tired_01.png",
+    "assets/turtle/frames/tired/tired_02.png",
+    "assets/turtle/frames/tired/tired_03.png",
+    "assets/turtle/frames/tired/tired_04.png",
+    "assets/turtle/frames/tired/tired_05.png",
+    "assets/turtle/frames/tired/tired_06.png"
+  ],
   drag: [
     "assets/turtle/frames/drag/drag_01.png",
     "assets/turtle/frames/drag/drag_02.png",
@@ -161,6 +169,7 @@ const PEEKING_AMBIENT_FRAMES = [
 const FRAME_VISUAL_SCALES = {
   idle: 1.3,
   alert: 1.3,
+  tired: 1.2,
   drag: 1,
   shellShoot: 1,
   chinTuck: 0.91,
@@ -464,6 +473,10 @@ function getMascotFrameScale(framePath: string) {
 
   if (framePath.includes("/alert/")) {
     return FRAME_VISUAL_SCALES.alert;
+  }
+
+  if (framePath.includes("/tired/")) {
+    return FRAME_VISUAL_SCALES.tired;
   }
 
   if (framePath.includes("/drag/")) {
