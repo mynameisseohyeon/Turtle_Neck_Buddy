@@ -152,6 +152,7 @@
 .turtle-overlay-stepper-button,
 .turtle-overlay-ok-button,
 .turtle-overlay-primary-button,
+.turtle-overlay-secondary-button,
 .turtle-overlay-preferences-button,
 .turtle-overlay-flag-button,
 .turtle-overlay-close-button {
@@ -247,6 +248,21 @@
   background: #ffd769;
   color: #213329;
   box-shadow: 2px 2px 0 #213329;
+}
+
+.turtle-overlay-secondary-button {
+  width: 100%;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 2px solid #213329;
+  background: #fffdf7;
+  color: #213329;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
 }
 
 .turtle-overlay-primary-button:disabled {

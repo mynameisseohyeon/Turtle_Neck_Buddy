@@ -21,6 +21,10 @@ export type OverlaySettings = {
   turtleSizeScaleVersion: number;
   customPosition: OverlayCustomPosition | null;
   lastReminderShownAt: string | null;
+  nextReminderAt: string | null;
+  doNotDisturbStart: string;
+  doNotDisturbEnd: string;
+  quietMode: boolean;
   excludedHostnames: string[];
 };
 
@@ -36,6 +40,12 @@ export type BackgroundToOverlayMessage =
   | {
       type: "SHOW_STRETCH_REMINDER";
       payload: OverlayReminderPayload;
+    }
+  | {
+      type: "SHOW_INITIAL_SCHEDULE_NOTICE";
+      payload: {
+        reminderIntervalMinutes: number;
+      };
     }
   | {
       type: "HIDE_STRETCH_REMINDER";
@@ -70,6 +80,15 @@ export type PopupToBackgroundMessage =
     }
   | {
       type: "PREVIEW_OVERLAY_ON_CURRENT_TAB";
+    }
+  | {
+      type: "RESCHEDULE_STRETCH_REMINDER";
+    }
+  | {
+      type: "SNOOZE_STRETCH_REMINDER";
+      payload: {
+        snoozeMinutes: number;
+      };
     };
 
 export type BackgroundToPopupMessage =
