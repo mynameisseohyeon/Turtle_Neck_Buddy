@@ -218,6 +218,30 @@ async function showOverlayInActiveTab() {
   }
 }
 
+async function showInitialScheduleNotice(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
+  const tab = await getActiveTab();
+  const supportedOrigin = getSupportedOrigin(tab?.url);
+  if (!tab?.id || !supportedOrigin) {
+    return;
+  }
+
+  const message: BackgroundToOverlayMessage = {
+    type: "SHOW_INITIAL_SCHEDULE_NOTICE",
+    payload: { reminderIntervalMinutes: settings.reminderIntervalMinutes }
+  };
+
+  try {
+    await chrome.tabs.sendMessage(tab.id, message);
+  } catch {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: [OVERLAY_SCRIPT_FILE] });
+      await chrome.tabs.sendMessage(tab.id, message);
+    } catch {
+      // The welcome notice is best-effort on pages where host access is not available yet.
+    }
+  }
+}
+
 async function deliverScheduledReminder(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
   let overlayDelivered = false;
 
@@ -271,6 +295,7 @@ async function showOverlayFromActionClick(tab: chrome.tabs.Tab) {
 chrome.runtime.onInstalled.addListener(() => {
   void saveDefaultOverlaySettings().then((settings) => {
     scheduleReminderAlarm(settings);
+    void showInitialScheduleNotice(settings);
   });
 });
 

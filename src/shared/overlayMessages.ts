@@ -42,6 +42,12 @@ export type BackgroundToOverlayMessage =
       payload: OverlayReminderPayload;
     }
   | {
+      type: "SHOW_INITIAL_SCHEDULE_NOTICE";
+      payload: {
+        reminderIntervalMinutes: number;
+      };
+    }
+  | {
       type: "HIDE_STRETCH_REMINDER";
     };
 

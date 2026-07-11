@@ -5,14 +5,10 @@ import type {
   OverlaySettings,
 } from "../shared/overlayMessages";
 import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/overlayState";
-import {
-  addStretchCompletion,
-  normalizeStretchRecords,
-  STRETCH_RECORDS_STORAGE_KEY
-} from "../shared/stretchRecords";
 
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
 const OVERLAY_SETTINGS_STORAGE_KEY = "turtle-neck-buddy-overlay-settings";
+const STRETCH_RECORDS_STORAGE_KEY = "turtle-neck-buddy-stretch-records";
 const IDLE_FRAME_INTERVAL_MS = 520;
 const PEEKING_FRAME_INTERVAL_MS = 180;
 const ALERT_FRAME_INTERVAL_MS = 90;
@@ -29,6 +25,7 @@ const RECENT_MASCOT_HOVER_HIT_RADIUS_PX = 10;
 const STRETCH_TOTAL_SECONDS = 30;
 const STRETCH_PHASE_SECONDS = 10;
 const SUCCESS_VISIBLE_MS = 3500;
+const INITIAL_NOTICE_VISIBLE_MS = 4500;
 const MIN_REMINDER_INTERVAL_MINUTES = 10;
 const MAX_REMINDER_INTERVAL_MINUTES = 180;
 const REMINDER_INTERVAL_STEP_MINUTES = 10;
@@ -364,6 +361,7 @@ let shellShootLongPressTimerId: number | undefined;
 let settingsCountdownTimerId: number | undefined;
 let stretchTimerId: number | undefined;
 let successTimerId: number | undefined;
+let initialNoticeTimerId: number | undefined;
 let ambientFrameIndex = 0;
 let pendingReminderIntervalMinutes = DEFAULT_OVERLAY_SETTINGS.reminderIntervalMinutes;
 let stretchStartedAt = 0;
@@ -382,6 +380,8 @@ let nextNeckReactionAt = 0;
 let recentMascotHoverHitUntil = 0;
 let recentMascotHoverHitPoint = { x: 0, y: 0 };
 let overlayStopped = false;
+let isReminderDue = false;
+let isInitialScheduleNotice = false;
 
 function normalizeOverlaySettings(value: unknown): OverlaySettings {
   if (!value || typeof value !== "object") {
@@ -777,6 +777,15 @@ function clearSuccessTimer() {
   successTimerId = undefined;
 }
 
+function clearInitialNoticeTimer() {
+  if (initialNoticeTimerId === undefined) {
+    return;
+  }
+
+  window.clearTimeout(initialNoticeTimerId);
+  initialNoticeTimerId = undefined;
+}
+
 function stopOverlayAfterContextInvalidated() {
   overlayStopped = true;
   clearReactionAnimation();
@@ -786,6 +795,7 @@ function stopOverlayAfterContextInvalidated() {
   clearSettingsCountdown();
   clearStretchTimer();
   clearSuccessTimer();
+  clearInitialNoticeTimer();
   document.getElementById(OVERLAY_HOST_ID)?.remove();
 }
 
@@ -865,6 +875,8 @@ function returnToWaitingState() {
   isReacting = false;
   isPointerDownOnMascot = false;
   hasPlayedShellShoot = false;
+  isReminderDue = false;
+  isInitialScheduleNotice = false;
   bubbleMode = "reminder";
   overlayState = { ...WAITING_OVERLAY_STATE };
   renderOverlay();
@@ -878,6 +890,8 @@ function startStretchRoutine() {
   clearShellShootLongPress();
   clearAmbientAnimation();
   stretchStartedAt = Date.now();
+  isReminderDue = false;
+  isInitialScheduleNotice = false;
   const copy = getOverlayCopy();
   overlayState = {
     visibilityState: "stretch",
@@ -943,13 +957,39 @@ function completeStretchRoutine() {
 async function recordStretchCompletion() {
   try {
     const stored = await chrome.storage.local.get(STRETCH_RECORDS_STORAGE_KEY);
-    const records = normalizeStretchRecords(stored[STRETCH_RECORDS_STORAGE_KEY]);
+    const storedRecords = stored[STRETCH_RECORDS_STORAGE_KEY];
+    const records =
+      storedRecords && typeof storedRecords === "object" && Array.isArray(storedRecords.days)
+        ? storedRecords
+        : { dailyGoal: 4, days: [] };
+    const today = getLocalDateKey();
+    const existing = records.days.find(
+      (record: unknown) =>
+        Boolean(record) &&
+        typeof record === "object" &&
+        (record as { date?: unknown }).date === today
+    ) as { date: string; completedCount: number } | undefined;
+    const days = existing
+      ? records.days.map((record: { date: string; completedCount: number }) =>
+          record.date === today ? { ...record, completedCount: record.completedCount + 1 } : record
+        )
+      : [...records.days, { date: today, completedCount: 1 }];
     await chrome.storage.local.set({
-      [STRETCH_RECORDS_STORAGE_KEY]: addStretchCompletion(records)
+      [STRETCH_RECORDS_STORAGE_KEY]: {
+        dailyGoal: typeof records.dailyGoal === "number" ? records.dailyGoal : 4,
+        days: days.sort((left: { date: string }, right: { date: string }) => right.date.localeCompare(left.date)).slice(0, 90)
+      }
     });
   } catch {
     stopOverlayAfterContextInvalidated();
   }
+}
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function formatStopwatchSeconds(totalSeconds: number) {
@@ -1373,6 +1413,7 @@ function renderOverlay() {
   let bubble: HTMLDivElement | null = null;
   const shouldShowBubble =
     bubbleMode !== "reminder" ||
+    isReminderDue ||
     currentState === "alert" ||
     currentState === "stretch" ||
     currentState === "success";
@@ -1387,6 +1428,9 @@ function renderOverlay() {
     } else if (bubbleMode === "preferences") {
       bubble.dataset.mode = "settings";
       bubble.append(createPreferencesBubbleContent());
+    } else if (isInitialScheduleNotice) {
+      bubble.dataset.mode = "action";
+      bubble.append(createInitialNoticeBubbleContent());
     } else if (currentState === "stretch") {
       bubble.dataset.mode = "stretch";
       bubble.append(createStretchBubbleContent());
@@ -1454,12 +1498,39 @@ function showReminder() {
     return;
   }
 
+  isReminderDue = true;
+  isInitialScheduleNotice = false;
   overlayState = {
-    visibilityState: "alert",
+    visibilityState: "peeking",
     turtleState: "idle",
     message: getOverlayCopy().reminder
   };
   renderOverlay();
+}
+
+function showInitialScheduleNotice(reminderIntervalMinutes: number) {
+  if (overlayStopped) {
+    return;
+  }
+
+  clearInitialNoticeTimer();
+  isReminderDue = false;
+  isInitialScheduleNotice = true;
+  const interval = normalizeReminderIntervalMinutes(reminderIntervalMinutes);
+  const messages: Record<OverlayLanguage, string> = {
+    en: `I'll remind you to stretch in ${interval} minutes!`,
+    ko: `${interval}분 뒤에 스트레칭 시간을 안내해줄게!`,
+    ja: `${interval}分後にストレッチをお知らせするね！`,
+    zh: `${interval}分钟后提醒你伸展！`,
+    es: `Te avisaré para estirarte en ${interval} minutos!`
+  };
+  overlayState = {
+    visibilityState: "alert",
+    turtleState: "idle",
+    message: messages[overlaySettings.language]
+  };
+  renderOverlay();
+  initialNoticeTimerId = window.setTimeout(() => hideOverlay(), INITIAL_NOTICE_VISIBLE_MS);
 }
 
 function hideOverlay() {
@@ -1476,6 +1547,8 @@ function hideOverlay() {
   isReacting = false;
   isPointerDownOnMascot = false;
   hasPlayedShellShoot = false;
+  isReminderDue = false;
+  isInitialScheduleNotice = false;
   overlayState = {
     ...overlayState,
     visibilityState: "hidden",
@@ -1628,6 +1701,16 @@ function createReminderBubbleContent() {
 
   content.append(message, startButton, snoozeButton);
 
+  return content;
+}
+
+function createInitialNoticeBubbleContent() {
+  const content = document.createElement("div");
+  content.className = "turtle-overlay-reminder";
+  const message = document.createElement("span");
+  message.className = "turtle-overlay-reminder-text";
+  message.textContent = overlayState.message;
+  content.append(message);
   return content;
 }
 
@@ -1795,6 +1878,10 @@ try {
       showReminder();
     }
 
+    if (message.type === "SHOW_INITIAL_SCHEDULE_NOTICE") {
+      showInitialScheduleNotice(message.payload.reminderIntervalMinutes);
+    }
+
     if (message.type === "HIDE_STRETCH_REMINDER") {
       hideOverlay();
     }
@@ -1811,6 +1898,5 @@ void loadOverlaySettings().then(() => {
   }
 
   preloadMascotFrames();
-  overlayState = { ...WAITING_OVERLAY_STATE };
   renderOverlay();
 });
