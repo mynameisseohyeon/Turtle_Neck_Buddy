@@ -17,7 +17,7 @@ async function showExtensionNotice(message: string) {
   try {
     await chrome.notifications.create({
       type: "basic",
-      iconUrl: "icons/icon128.png",
+      iconUrl: "icons/icon.png",
       title: "Turtle Neck Buddy",
       message
     });

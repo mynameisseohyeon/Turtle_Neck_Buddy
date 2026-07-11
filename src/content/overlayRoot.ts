@@ -99,6 +99,14 @@ const FRAMES = {
     "assets/turtle/frames/alert/alert_03.png",
     "assets/turtle/frames/alert/alert_04.png"
   ],
+  tired: [
+    "assets/turtle/frames/tired/tired_01.png",
+    "assets/turtle/frames/tired/tired_02.png",
+    "assets/turtle/frames/tired/tired_03.png",
+    "assets/turtle/frames/tired/tired_04.png",
+    "assets/turtle/frames/tired/tired_05.png",
+    "assets/turtle/frames/tired/tired_06.png"
+  ],
   drag: [
     "assets/turtle/frames/drag/drag_01.png",
     "assets/turtle/frames/drag/drag_02.png",
@@ -161,6 +169,7 @@ const PEEKING_AMBIENT_FRAMES = [
 const FRAME_VISUAL_SCALES = {
   idle: 1.3,
   alert: 1.3,
+  tired: 1.2,
   drag: 1,
   shellShoot: 1,
   chinTuck: 0.91,
@@ -466,6 +475,10 @@ function getMascotFrameScale(framePath: string) {
     return FRAME_VISUAL_SCALES.alert;
   }
 
+  if (framePath.includes("/tired/")) {
+    return FRAME_VISUAL_SCALES.tired;
+  }
+
   if (framePath.includes("/drag/")) {
     return FRAME_VISUAL_SCALES.drag;
   }
@@ -519,6 +532,9 @@ function setMascotFrame(mascot: HTMLImageElement, framePath: string) {
   }
 
   mascot.dataset.framePath = framePath;
+  if (!framePath.includes("/shell_shoot/")) {
+    delete mascot.dataset.shellShootDirection;
+  }
   applyMascotFrameSize(mascot, framePath);
   mascot.src = frameUrl;
   return true;
@@ -1014,6 +1030,11 @@ function playShellShootInteraction(mascot: HTMLImageElement) {
   let frameIndex = 0;
   hasPlayedShellShoot = true;
   isReacting = true;
+  const mascotRect = mascot.getBoundingClientRect();
+  const host = document.getElementById(OVERLAY_HOST_ID);
+  const shouldShootLeft =
+    host?.dataset.position === "bottom-left" || mascotRect.left + mascotRect.width / 2 < window.innerWidth / 2;
+  mascot.dataset.shellShootDirection = shouldShootLeft ? "left" : "right";
   clearShellShootLongPress();
   clearShellShootAnimation();
   clearReactionAnimation();
