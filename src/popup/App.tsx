@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StretchCard } from "./components/StretchCard";
 import { TurtleSprite } from "./components/TurtleSprite";
+import { OnboardingPanel } from "./components/OnboardingPanel";
 import { PRAISE_MESSAGES, TURTLE_MESSAGES } from "../shared/messages";
 import type {
   BackgroundToPopupMessage,
@@ -10,6 +11,12 @@ import type {
 } from "../shared/overlayMessages";
 import { STRETCH_CARDS } from "../shared/stretchCards";
 import type { TurtleState } from "../shared/types";
+import {
+  DEFAULT_OVERLAY_SETTINGS,
+  OVERLAY_SETTINGS_STORAGE_KEY,
+  normalizeOverlaySettings
+} from "../shared/overlaySettings";
+import { getOnboardingCompleted, ONBOARDING_COMPLETED_STORAGE_KEY } from "../shared/onboarding";
 
 const STATE_OPTIONS: Array<{ label: string; value: TurtleState }> = [
   { label: "기본", value: "idle" },
@@ -27,7 +34,13 @@ const DEFAULT_PERMISSION_STATE: CurrentSiteOverlayPermissionState = {
 };
 
 function canUseExtensionApi() {
-  return typeof chrome !== "undefined" && Boolean(chrome.runtime?.sendMessage);
+  return (
+    typeof chrome !== "undefined" &&
+    Boolean(chrome.runtime?.id) &&
+    Boolean(chrome.runtime?.sendMessage) &&
+    Boolean(chrome.storage?.local) &&
+    Boolean(chrome.permissions)
+  );
 }
 
 function sendBackgroundMessage(message: PopupToBackgroundMessage) {
@@ -37,6 +50,11 @@ function sendBackgroundMessage(message: PopupToBackgroundMessage) {
 export function App() {
   const [turtleState, setTurtleState] = useState<TurtleState>("idle");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isOnboardingLoading, setIsOnboardingLoading] = useState(true);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [reminderIntervalMinutes, setReminderIntervalMinutes] = useState(
+    DEFAULT_OVERLAY_SETTINGS.reminderIntervalMinutes
+  );
   const [permissionState, setPermissionState] =
     useState<CurrentSiteOverlayPermissionState>(DEFAULT_PERMISSION_STATE);
   const [permissionStatus, setPermissionStatus] = useState<"idle" | "checking" | "requesting" | "previewing">(
@@ -80,7 +98,58 @@ export function App() {
 
   useEffect(() => {
     void refreshPermissionState();
+
+    if (!canUseExtensionApi()) {
+      setIsOnboardingOpen(true);
+      setIsOnboardingLoading(false);
+      return;
+    }
+
+    void chrome.storage.local
+      .get([ONBOARDING_COMPLETED_STORAGE_KEY, OVERLAY_SETTINGS_STORAGE_KEY])
+      .then((stored) => {
+        const settings = normalizeOverlaySettings(stored[OVERLAY_SETTINGS_STORAGE_KEY]);
+        setReminderIntervalMinutes(settings.reminderIntervalMinutes);
+        setIsOnboardingOpen(!getOnboardingCompleted(stored[ONBOARDING_COMPLETED_STORAGE_KEY]));
+      })
+      .catch(() => {
+        setIsOnboardingOpen(true);
+      })
+      .finally(() => {
+        setIsOnboardingLoading(false);
+      });
   }, []);
+
+  const saveReminderInterval = async (intervalMinutes: number) => {
+    setReminderIntervalMinutes(intervalMinutes);
+
+    if (!canUseExtensionApi()) {
+      return;
+    }
+
+    const stored = await chrome.storage.local.get(OVERLAY_SETTINGS_STORAGE_KEY);
+    const settings = normalizeOverlaySettings(stored[OVERLAY_SETTINGS_STORAGE_KEY]);
+    await chrome.storage.local.set({
+      [OVERLAY_SETTINGS_STORAGE_KEY]: {
+        ...settings,
+        reminderIntervalMinutes: intervalMinutes,
+        lastReminderShownAt: new Date().toISOString()
+      }
+    });
+  };
+
+  const completeOnboarding = async () => {
+    if (canUseExtensionApi()) {
+      await chrome.storage.local.set({ [ONBOARDING_COMPLETED_STORAGE_KEY]: true });
+    }
+
+    setIsOnboardingOpen(false);
+  };
+
+  const reopenOnboarding = () => {
+    setIsSettingsOpen(false);
+    setIsOnboardingOpen(true);
+  };
 
   const handleRequestOverlayPermission = async () => {
     if (!permissionState.origin || !canUseExtensionApi()) {
@@ -149,6 +218,29 @@ export function App() {
 
   const isPermissionBusy = permissionStatus === "checking" || permissionStatus === "requesting";
 
+  if (isOnboardingLoading) {
+    return (
+      <main className="popup-shell onboarding-loading" aria-label="설정 불러오는 중">
+        <TurtleSprite state="idle" />
+      </main>
+    );
+  }
+
+  if (isOnboardingOpen) {
+    return (
+      <OnboardingPanel
+        reminderIntervalMinutes={reminderIntervalMinutes}
+        permissionState={permissionState}
+        permissionStatus={permissionStatus}
+        feedback={overlayFeedback}
+        onSaveInterval={saveReminderInterval}
+        onEnableSite={handleRequestOverlayPermission}
+        onPreview={handlePreviewOverlay}
+        onComplete={completeOnboarding}
+      />
+    );
+  }
+
   return (
     <main className="popup-shell">
       <header className="popup-header">
@@ -174,7 +266,7 @@ export function App() {
         </div>
         <div>
           <span>다음 알림</span>
-          <strong>50분</strong>
+          <strong>{reminderIntervalMinutes}분</strong>
         </div>
       </section>
 
@@ -237,7 +329,11 @@ export function App() {
 
       {isSettingsOpen ? (
         <div id="settings-panel">
-          <SettingsPanel />
+          <SettingsPanel
+            reminderIntervalMinutes={reminderIntervalMinutes}
+            onChangeReminderInterval={saveReminderInterval}
+            onOpenOnboarding={reopenOnboarding}
+          />
         </div>
       ) : null}
     </main>
