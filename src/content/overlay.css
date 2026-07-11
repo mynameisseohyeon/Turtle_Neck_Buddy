@@ -375,6 +375,10 @@
   transform: scaleX(-1);
 }
 
+.turtle-overlay-mascot[data-shell-shoot-direction="left"] {
+  transform: scaleX(-1);
+}
+
 :host([data-position="bottom-left"]) .turtle-overlay-mascot-stage[data-dragging="true"] .turtle-overlay-mascot {
   transform: translateY(-3px) scaleX(-1);
 }
