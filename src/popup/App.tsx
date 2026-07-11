@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { OnboardingPanel } from "./components/OnboardingPanel";
+import {
+  Bell,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  Flame,
+  MoreVertical,
+  Pause,
+  RotateCcw,
+  SlidersHorizontal,
+  Target,
+  TimerReset
+} from "lucide-react";
 import type {
   BackgroundToPopupMessage,
-  CurrentSiteOverlayPermissionState,
   OverlayLanguage,
   OverlayPosition,
   OverlaySettings,
@@ -16,7 +27,6 @@ import {
   REMINDER_INTERVAL_STEP_MINUTES,
   normalizeOverlaySettings
 } from "../shared/overlaySettings";
-import { getOnboardingCompleted, ONBOARDING_COMPLETED_STORAGE_KEY } from "../shared/onboarding";
 import {
   addStretchCompletion,
   DEFAULT_STRETCH_RECORDS,
@@ -37,6 +47,12 @@ const STRETCH_PHASES = [
 ] as const;
 const STRETCH_TOTAL_SECONDS = 30;
 const STRETCH_PHASE_SECONDS = 10;
+const DETAIL_ASSET_ROOT = "assets/turtle/frames/detail_panel_screen";
+const STRETCH_PHASE_IMAGES = [
+  `${DETAIL_ASSET_ROOT}/shoulder_roll_start.png`,
+  `${DETAIL_ASSET_ROOT}/shoulder_roll_mid.png`,
+  `${DETAIL_ASSET_ROOT}/shoulder_roll_end.png`
+] as const;
 
 const LANGUAGE_OPTIONS: Array<{ value: OverlayLanguage; label: string; flag: string }> = [
   { value: "en", label: "English", flag: "🇺🇸" },
@@ -46,21 +62,12 @@ const LANGUAGE_OPTIONS: Array<{ value: OverlayLanguage; label: string; flag: str
   { value: "es", label: "Español", flag: "🇪🇸" }
 ];
 
-const DEFAULT_PERMISSION_STATE: CurrentSiteOverlayPermissionState = {
-  isSupported: false,
-  origin: null,
-  hostname: null,
-  granted: false,
-  reason: "permission-unavailable"
-};
-
 function canUseExtensionApi() {
   return (
     typeof chrome !== "undefined" &&
     Boolean(chrome.runtime?.id) &&
     Boolean(chrome.runtime?.sendMessage) &&
-    Boolean(chrome.storage?.local) &&
-    Boolean(chrome.permissions)
+    Boolean(chrome.storage?.local)
   );
 }
 
@@ -108,10 +115,7 @@ export function App() {
   const [remainingSeconds, setRemainingSeconds] = useState(STRETCH_TOTAL_SECONDS);
   const [isPaused, setIsPaused] = useState(false);
   const [now, setNow] = useState(new Date());
-  const [isOnboardingLoading, setIsOnboardingLoading] = useState(true);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
-  const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE);
-  const [permissionStatus, setPermissionStatus] = useState<"idle" | "checking" | "requesting">("checking");
+  const [isLoading, setIsLoading] = useState(true);
   const [feedback, setFeedback] = useState("");
 
   const todayCount = getTodayCompletedCount(records, now);
@@ -149,35 +153,20 @@ export function App() {
 
   useEffect(() => {
     if (!canUseExtensionApi()) {
-      setIsOnboardingOpen(false);
-      setIsOnboardingLoading(false);
-      setPermissionStatus("idle");
+      setIsLoading(false);
       return;
     }
 
-    void Promise.all([
-      chrome.storage.local.get([
-        ONBOARDING_COMPLETED_STORAGE_KEY,
-        OVERLAY_SETTINGS_STORAGE_KEY,
-        STRETCH_RECORDS_STORAGE_KEY
-      ]),
-      sendBackgroundMessage({ type: "GET_CURRENT_SITE_OVERLAY_PERMISSION" })
-    ])
-      .then(([stored, permissionResponse]) => {
+    void chrome.storage.local
+      .get([OVERLAY_SETTINGS_STORAGE_KEY, STRETCH_RECORDS_STORAGE_KEY])
+      .then((stored) => {
         const storedSettings = normalizeOverlaySettings(stored[OVERLAY_SETTINGS_STORAGE_KEY]);
         setSettings(storedSettings);
         setDraftSettings(storedSettings);
         setRecords(normalizeStretchRecords(stored[STRETCH_RECORDS_STORAGE_KEY]));
-        setIsOnboardingOpen(!getOnboardingCompleted(stored[ONBOARDING_COMPLETED_STORAGE_KEY]));
-        if (permissionResponse.type === "CURRENT_SITE_OVERLAY_PERMISSION") {
-          setPermissionState(permissionResponse.payload);
-        }
       })
       .catch(() => setFeedback("설정을 불러오지 못했어요."))
-      .finally(() => {
-        setPermissionStatus("idle");
-        setIsOnboardingLoading(false);
-      });
+      .finally(() => setIsLoading(false));
   }, []);
 
   async function persistSettings(nextSettings: OverlaySettings) {
@@ -243,46 +232,8 @@ export function App() {
     }
   }
 
-  async function requestSitePermission() {
-    if (!permissionState.origin || !canUseExtensionApi()) {
-      return;
-    }
-    setPermissionStatus("requesting");
-    const granted = await chrome.permissions.request({ origins: [permissionState.origin] });
-    setPermissionState((current) => ({ ...current, granted }));
-    setPermissionStatus("idle");
-  }
-
-  async function completeOnboarding() {
-    if (canUseExtensionApi()) {
-      await chrome.storage.local.set({ [ONBOARDING_COMPLETED_STORAGE_KEY]: true });
-    }
-    setIsOnboardingOpen(false);
-  }
-
-  if (isOnboardingLoading) {
+  if (isLoading) {
     return <main className="detail-panel-shell loading-panel" aria-label="설정 불러오는 중" />;
-  }
-
-  if (isOnboardingOpen) {
-    return (
-      <OnboardingPanel
-        reminderIntervalMinutes={settings.reminderIntervalMinutes}
-        permissionState={permissionState}
-        permissionStatus={permissionStatus === "requesting" ? "requesting" : "idle"}
-        feedback={feedback}
-        onSaveInterval={async (interval) => {
-          await persistSettings({
-            ...settings,
-            reminderIntervalMinutes: interval,
-            nextReminderAt: new Date(Date.now() + interval * 60_000).toISOString()
-          });
-        }}
-        onEnableSite={requestSitePermission}
-        onPreview={async () => undefined}
-        onComplete={completeOnboarding}
-      />
-    );
   }
 
   return (
@@ -294,13 +245,23 @@ export function App() {
           onClick={() => setView("main")}
           aria-label="메인 화면"
         >
-          <span className="brand-mark" aria-hidden="true" />
+          <img className="brand-avatar" src={`${DETAIL_ASSET_ROOT}/avatar_head.png`} alt="" />
           <span>Turtle Neck Buddy</span>
         </button>
         {view === "main" ? (
-          <button type="button" className="icon-button" onClick={() => setView("settings")} aria-label="설정">
-            ⚙
-          </button>
+          <div className="header-actions">
+            <button
+              type="button"
+              className="switch-control"
+              data-active={settings.overlayEnabled}
+              onClick={() => void toggleReminder()}
+              aria-pressed={settings.overlayEnabled}
+              aria-label={settings.overlayEnabled ? "스트레칭 알림 끄기" : "스트레칭 알림 켜기"}
+            />
+            <button type="button" className="menu-button" onClick={() => setView("settings")} aria-label="설정 열기">
+              <MoreVertical size={22} />
+            </button>
+          </div>
         ) : (
           <button type="button" className="back-button" onClick={() => setView("main")}>
             ← 뒤로
@@ -310,47 +271,42 @@ export function App() {
 
       {view === "main" ? (
         <section className="panel-view main-reminder-view" aria-labelledby="main-title">
-          <div className="main-title-row">
+          <article className="stretch-callout">
+            <img src={`${DETAIL_ASSET_ROOT}/reminder_card.png`} alt="기다리는 거북이" />
             <div>
-              <p className="eyebrow">오늘도 목을 가볍게</p>
-              <h1 id="main-title">스트레칭 리마인더</h1>
+              <h1 id="main-title">잠깐! 목 스트레칭 할 시간이에요!</h1>
+              <p>거북목 예방을 위해<br />잠시 고개를 펴고 스트레칭 해요.</p>
             </div>
-            <button
-              type="button"
-              className="switch-control"
-              data-active={settings.overlayEnabled}
-              onClick={() => void toggleReminder()}
-              aria-pressed={settings.overlayEnabled}
-            >
-              <span>{settings.overlayEnabled ? "ON" : "OFF"}</span>
-            </button>
-          </div>
-
-          <div className="mascot-reserved-space" aria-label="거북이 이미지가 들어갈 자리" />
+          </article>
 
           <article className="reminder-card">
-            <div>
-              <span className="card-label">다음 알림</span>
-              <strong>{settings.overlayEnabled ? formatRemaining(nextReminderAt, now) : "알림 꺼짐"}</strong>
-              <small>{nextReminderAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</small>
+            <div className="next-reminder-heading">
+              <span>다음 알림</span>
+              <strong>{settings.overlayEnabled ? nextReminderAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "OFF"}</strong>
             </div>
-            <span className="interval-badge">{settings.reminderIntervalMinutes}분 간격</span>
+            <div className="reminder-progress"><span /></div>
+            <small>{settings.overlayEnabled ? `${formatRemaining(nextReminderAt, now)} 후` : "알림이 꺼져 있어요"}</small>
           </article>
 
           <div className="primary-actions">
-            <button type="button" className="primary-button" onClick={openRoutine}>지금 스트레칭</button>
-            <button type="button" className="secondary-button" onClick={() => void snoozeReminder()}>5분 뒤 알림</button>
+            <button type="button" className="primary-button" onClick={openRoutine}><RotateCcw size={17} />지금 스트레칭</button>
+            <button type="button" className="secondary-button" onClick={() => void snoozeReminder()}><Clock3 size={17} />5분 뒤 알림</button>
           </div>
 
           <article className="today-summary">
-            <div>
+            <div className="today-count">
               <span className="card-label">오늘의 스트레칭</span>
-              <strong>{todayCount}<small> / {records.dailyGoal}회</small></strong>
+              <strong>{todayCount}회</strong>
+              <small>목표 {records.dailyGoal}회</small>
             </div>
-            <div className="summary-progress" aria-label={`오늘 목표 ${records.dailyGoal}회 중 ${todayCount}회 완료`}>
-              <span style={{ width: `${Math.min(100, (todayCount / records.dailyGoal) * 100)}%` }} />
+            <div
+              className="summary-ring"
+              style={{ "--summary-progress": `${Math.min(100, (todayCount / records.dailyGoal) * 100) * 3.6}deg` } as CSSProperties}
+              aria-label={`오늘 목표 ${records.dailyGoal}회 중 ${todayCount}회 완료`}
+            >
+              <div>{Math.round(Math.min(100, (todayCount / records.dailyGoal) * 100))}%</div>
             </div>
-            <button type="button" className="text-button" onClick={() => setView("record")}>기록 보기 →</button>
+            <button type="button" className="record-button" onClick={() => setView("record")}><CalendarDays size={24} />기록 보기</button>
           </article>
 
           {feedback ? <p className="panel-feedback" role="status">{feedback}</p> : null}
@@ -362,9 +318,9 @@ export function App() {
           <p className="eyebrow">꾸준함이 만든 변화</p>
           <h1 id="record-title">오늘의 기록</h1>
           <div className="record-metrics">
-            <article><span>오늘 완료</span><strong>{todayCount}회</strong></article>
-            <article><span>목표 횟수</span><strong>{records.dailyGoal}회</strong></article>
-            <article><span>연속 실천</span><strong>{currentStreak}일</strong></article>
+            <article><Target size={22} /><span>오늘 완료</span><strong>{todayCount}회</strong></article>
+            <article><Flame size={22} /><span>목표 횟수</span><strong>{records.dailyGoal}회</strong></article>
+            <article><Clock3 size={22} /><span>연속 실천</span><strong>{currentStreak}일</strong></article>
           </div>
           <article className="week-card">
             <h2>최근 7일</h2>
@@ -385,12 +341,18 @@ export function App() {
         <section className="panel-view routine-view" aria-labelledby="routine-title">
           <p className="eyebrow">오늘의 루틴</p>
           <h1 id="routine-title">목과 어깨를 천천히 풀어요</h1>
-          <div className="mascot-reserved-space routine-space" aria-label="거북이 스트레칭 이미지가 들어갈 자리" />
+          <div className="routine-hero">
+            <img src={`${DETAIL_ASSET_ROOT}/ready_pose.png`} alt="스트레칭을 준비하는 거북이" />
+            <div className="routine-speech">준비됐나요?<br />스트레칭을 시작해요!<span>♥</span></div>
+          </div>
           <article className="routine-card">
+            <div className="routine-facts">
+              <div><SlidersHorizontal size={21} /><span>선택된 루틴</span><strong>{STRETCH_PHASES[2].title}</strong></div>
+              <div><Clock3 size={21} /><span>예상 시간</span><strong>30초</strong></div>
+              <div><Target size={21} /><span>오늘 횟수</span><strong>{todayCount}회</strong></div>
+            </div>
             <div className="step-indicator"><span>진행 단계</span><strong>1 / 3</strong></div>
-            <h2>{STRETCH_PHASES[0].title}</h2>
-            <p>{STRETCH_PHASES.map((phase) => phase.title).join(" · ")}</p>
-            <span className="duration-chip">예상 시간 30초</span>
+            <div className="step-track"><span data-active="true">1</span><i /><span>2</span><i /><span>3</span></div>
           </article>
           <div className="primary-actions">
             <button type="button" className="primary-button" onClick={startRoutine}>30초 시작</button>
@@ -401,18 +363,23 @@ export function App() {
 
       {view === "timer" ? (
         <section className="panel-view timer-view" aria-labelledby="timer-title">
-          <div className="step-indicator"><span>진행 단계</span><strong>{currentPhaseIndex + 1} / 3</strong></div>
           <h1 id="timer-title">{currentPhase.title}</h1>
-          <div className="mascot-reserved-space timer-space" aria-label="거북이 스트레칭 포즈가 들어갈 자리" />
-          <div className="circular-timer" style={{ "--timer-progress": `${timerProgress}deg` } as CSSProperties}>
-            <div><strong>{remainingSeconds}</strong><span>초</span></div>
+          <img className="timer-turtle" src={STRETCH_PHASE_IMAGES[currentPhaseIndex]} alt={`${currentPhase.title} 동작을 보여주는 거북이`} />
+          <div className="timer-content-row">
+            <div className="circular-timer" style={{ "--timer-progress": `${timerProgress}deg` } as CSSProperties}>
+              <div><strong>{remainingSeconds}</strong><span>초</span></div>
+            </div>
+            <div className="timer-copy">
+              <div className="step-indicator"><span>진행 상황</span><strong>{currentPhaseIndex + 1} / 3</strong></div>
+              <div className="linear-progress"><span style={{ width: `${((currentPhaseIndex + 1) / 3) * 100}%` }} /></div>
+              <p className="timer-guide">{currentPhase.guide}</p>
+            </div>
           </div>
-          <p className="timer-guide">{currentPhase.guide}</p>
           <div className="primary-actions">
             <button type="button" className="secondary-button" onClick={() => setIsPaused((current) => !current)}>
-              {isPaused ? "계속하기" : "일시정지"}
+              {isPaused ? <TimerReset size={18} /> : <Pause size={18} />}{isPaused ? "계속하기" : "일시정지"}
             </button>
-            <button type="button" className="primary-button" onClick={() => void completeRoutine()}>완료하기</button>
+            <button type="button" className="primary-button" onClick={() => void completeRoutine()}><CheckCircle2 size={18} />완료하기</button>
           </div>
         </section>
       ) : null}
@@ -423,6 +390,7 @@ export function App() {
           <h1 id="settings-title">스트레칭 설정</h1>
           <div className="form-stack">
             <label className="form-row toggle-row">
+              <Bell size={20} />
               <span><strong>알림</strong><small>설정한 시간이 되면 거북이가 나타나요.</small></span>
               <input
                 type="checkbox"
@@ -431,6 +399,7 @@ export function App() {
               />
             </label>
             <div className="form-row">
+              <SlidersHorizontal size={20} />
               <span><strong>알림 간격</strong><small>10분 단위로 조절할 수 있어요.</small></span>
               <div className="stepper-control">
                 <button type="button" aria-label="10분 줄이기" onClick={() => setDraftSettings({
@@ -445,10 +414,12 @@ export function App() {
               </div>
             </div>
             <div className="form-row next-reminder-row">
+              <Clock3 size={20} />
               <span><strong>다음 알림 시간</strong><small>저장한 시점부터 새 간격을 적용해요.</small></span>
               <time>{getNextReminderAt(draftSettings, now).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</time>
             </div>
             <div className="form-row time-range-row">
+              <Clock3 size={20} />
               <span><strong>방해 금지 시간</strong><small>이 시간에는 자동으로 나타나지 않아요.</small></span>
               <div>
                 <input type="time" value={draftSettings.doNotDisturbStart} onChange={(event) => setDraftSettings({ ...draftSettings, doNotDisturbStart: event.target.value })} />
@@ -463,7 +434,7 @@ export function App() {
       ) : null}
 
       {view === "preferences" ? (
-        <section className="panel-view" aria-labelledby="preferences-title">
+        <section className="panel-view preferences-view" aria-labelledby="preferences-title">
           <p className="eyebrow">Preferences</p>
           <h1 id="preferences-title">거북이 환경 설정</h1>
           <div className="form-stack">
@@ -475,7 +446,10 @@ export function App() {
             </label>
             <label className="form-row slider-row">
               <span><strong>거북이 크기</strong><small>{draftSettings.turtleSize}</small></span>
-              <input type="range" min="20" max="80" value={draftSettings.turtleSize} onChange={(event) => setDraftSettings({ ...draftSettings, turtleSize: Number(event.target.value) })} />
+              <div className="size-slider-control">
+                <img src={`${DETAIL_ASSET_ROOT}/tiny_slider_icon.png`} alt="" />
+                <input type="range" min="20" max="80" value={draftSettings.turtleSize} onChange={(event) => setDraftSettings({ ...draftSettings, turtleSize: Number(event.target.value) })} />
+              </div>
             </label>
             <div className="form-row position-row">
               <span><strong>기본 위치</strong><small>알림이 나타날 화면 가장자리예요.</small></span>
