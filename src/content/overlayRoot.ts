@@ -15,7 +15,12 @@ const STRETCH_FRAME_INTERVAL_MS = 320;
 const SUCCESS_FRAME_INTERVAL_MS = 180;
 const REACTION_FRAME_INTERVAL_MS = 70;
 const DRAG_FRAME_INTERVAL_MS = 80;
+const SHELL_SHOOT_FRAME_INTERVAL_MS = 120;
 const NECK_REACTION_COOLDOWN_MS = 2400;
+const SHELL_SHOOT_LONG_PRESS_MS = 560;
+const DRAG_START_DISTANCE_PX = 6;
+const RECENT_MASCOT_HOVER_HIT_MS = 700;
+const RECENT_MASCOT_HOVER_HIT_RADIUS_PX = 10;
 const STRETCH_TOTAL_SECONDS = 30;
 const STRETCH_PHASE_SECONDS = 10;
 const SUCCESS_VISIBLE_MS = 3500;
@@ -105,6 +110,14 @@ const FRAMES = {
     "assets/turtle/frames/drag/drag_08.png",
     "assets/turtle/frames/drag/drag_09.png"
   ],
+  shellShoot: [
+    "assets/turtle/frames/shell_shoot/shell_shoot_01.png",
+    "assets/turtle/frames/shell_shoot/shell_shoot_02.png",
+    "assets/turtle/frames/shell_shoot/shell_shoot_03.png",
+    "assets/turtle/frames/shell_shoot/shell_shoot_04.png",
+    "assets/turtle/frames/shell_shoot/shell_shoot_05.png",
+    "assets/turtle/frames/shell_shoot/shell_shoot_06.png"
+  ],
   chinTuck: [
     "assets/turtle/frames/chin_tuck/chin_tuck_01.png",
     "assets/turtle/frames/chin_tuck/chin_tuck_02.png",
@@ -149,6 +162,7 @@ const FRAME_VISUAL_SCALES = {
   idle: 1.3,
   alert: 1.3,
   drag: 1,
+  shellShoot: 1,
   chinTuck: 0.91,
   neckTilt: 1,
   shoulderRoll: 0.95,
@@ -321,6 +335,8 @@ let overlaySettings: OverlaySettings = DEFAULT_OVERLAY_SETTINGS;
 let bubbleMode: "reminder" | "settings" | "preferences" = "reminder";
 let ambientTimerId: number | undefined;
 let reactionTimerId: number | undefined;
+let shellShootTimerId: number | undefined;
+let shellShootLongPressTimerId: number | undefined;
 let settingsCountdownTimerId: number | undefined;
 let stretchTimerId: number | undefined;
 let successTimerId: number | undefined;
@@ -329,6 +345,8 @@ let pendingReminderIntervalMinutes = DEFAULT_OVERLAY_SETTINGS.reminderIntervalMi
 let stretchStartedAt = 0;
 let isReacting = false;
 let isDragging = false;
+let isPointerDownOnMascot = false;
+let hasPlayedShellShoot = false;
 let hasDragged = false;
 let didJustDrag = false;
 let dragOffset = { x: 0, y: 0 };
@@ -337,6 +355,8 @@ let dragPosition = { x: 0, y: 0 };
 let lastDragFramePath: string = FRAMES.drag[4];
 let lastDragFrameChangedAt = 0;
 let nextNeckReactionAt = 0;
+let recentMascotHoverHitUntil = 0;
+let recentMascotHoverHitPoint = { x: 0, y: 0 };
 let overlayStopped = false;
 
 function normalizeOverlaySettings(value: unknown): OverlaySettings {
@@ -450,6 +470,10 @@ function getMascotFrameScale(framePath: string) {
     return FRAME_VISUAL_SCALES.drag;
   }
 
+  if (framePath.includes("/shell_shoot/")) {
+    return FRAME_VISUAL_SCALES.shellShoot;
+  }
+
   if (framePath.includes("/chin_tuck/")) {
     return FRAME_VISUAL_SCALES.chinTuck;
   }
@@ -539,6 +563,44 @@ function setDragFrame(mascot: HTMLImageElement, deltaX: number, deltaY: number) 
   setMascotFrame(mascot, nextFramePath);
 }
 
+function isPointerInsideMascotHitArea(event: Pick<MouseEvent, "clientX" | "clientY">, mascot: HTMLImageElement) {
+  const mascotRect = mascot.getBoundingClientRect();
+
+  if (mascotRect.width <= 0 || mascotRect.height <= 0) {
+    return false;
+  }
+
+  const frameDriftPadding = 12;
+  const insetX = Math.max(4, mascotRect.width * 0.04);
+  const insetTop = Math.max(3, mascotRect.height * 0.02);
+  const insetBottom = Math.max(3, mascotRect.height * 0.015);
+  return (
+    event.clientX >= mascotRect.left + insetX - frameDriftPadding &&
+    event.clientX <= mascotRect.right - insetX + frameDriftPadding &&
+    event.clientY >= mascotRect.top + insetTop - frameDriftPadding &&
+    event.clientY <= mascotRect.bottom - insetBottom + frameDriftPadding
+  );
+}
+
+function rememberMascotHoverHit(event: Pick<MouseEvent, "clientX" | "clientY">) {
+  recentMascotHoverHitUntil = Date.now() + RECENT_MASCOT_HOVER_HIT_MS;
+  recentMascotHoverHitPoint = {
+    x: event.clientX,
+    y: event.clientY
+  };
+}
+
+function isRecentMascotHoverHit(event: Pick<MouseEvent, "clientX" | "clientY">) {
+  if (Date.now() > recentMascotHoverHitUntil) {
+    return false;
+  }
+
+  return (
+    Math.hypot(event.clientX - recentMascotHoverHitPoint.x, event.clientY - recentMascotHoverHitPoint.y) <=
+    RECENT_MASCOT_HOVER_HIT_RADIUS_PX
+  );
+}
+
 function getCurrentStretchPhaseIndex() {
   const remainingSeconds = overlayState.remainingSeconds ?? STRETCH_TOTAL_SECONDS;
   const elapsedSeconds = STRETCH_TOTAL_SECONDS - remainingSeconds;
@@ -625,6 +687,24 @@ function clearReactionAnimation() {
   reactionTimerId = undefined;
 }
 
+function clearShellShootAnimation() {
+  if (shellShootTimerId === undefined) {
+    return;
+  }
+
+  window.clearInterval(shellShootTimerId);
+  shellShootTimerId = undefined;
+}
+
+function clearShellShootLongPress() {
+  if (shellShootLongPressTimerId === undefined) {
+    return;
+  }
+
+  window.clearTimeout(shellShootLongPressTimerId);
+  shellShootLongPressTimerId = undefined;
+}
+
 function clearSettingsCountdown() {
   if (settingsCountdownTimerId === undefined) {
     return;
@@ -655,6 +735,8 @@ function clearSuccessTimer() {
 function stopOverlayAfterContextInvalidated() {
   overlayStopped = true;
   clearReactionAnimation();
+  clearShellShootAnimation();
+  clearShellShootLongPress();
   clearAmbientAnimation();
   clearSettingsCountdown();
   clearStretchTimer();
@@ -730,10 +812,14 @@ function closeSettingsBubble() {
 
 function returnToWaitingState() {
   clearReactionAnimation();
+  clearShellShootAnimation();
+  clearShellShootLongPress();
   clearAmbientAnimation();
   clearStretchTimer();
   clearSuccessTimer();
   isReacting = false;
+  isPointerDownOnMascot = false;
+  hasPlayedShellShoot = false;
   bubbleMode = "reminder";
   overlayState = { ...WAITING_OVERLAY_STATE };
   renderOverlay();
@@ -743,6 +829,8 @@ function startStretchRoutine() {
   clearSuccessTimer();
   clearStretchTimer();
   clearReactionAnimation();
+  clearShellShootAnimation();
+  clearShellShootLongPress();
   clearAmbientAnimation();
   stretchStartedAt = Date.now();
   const copy = getOverlayCopy();
@@ -790,6 +878,8 @@ function startStretchRoutine() {
 function completeStretchRoutine() {
   clearStretchTimer();
   clearReactionAnimation();
+  clearShellShootAnimation();
+  clearShellShootLongPress();
   clearAmbientAnimation();
   clearSuccessTimer();
   overlayState = {
@@ -910,6 +1000,46 @@ function playNeckReaction(mascot: HTMLImageElement) {
   }, REACTION_FRAME_INTERVAL_MS);
 }
 
+function playShellShootInteraction(mascot: HTMLImageElement) {
+  if (
+    overlayStopped ||
+    isDragging ||
+    overlayState.visibilityState === "hidden" ||
+    overlayState.visibilityState === "stretch" ||
+    overlayState.visibilityState === "success"
+  ) {
+    return;
+  }
+
+  let frameIndex = 0;
+  hasPlayedShellShoot = true;
+  isReacting = true;
+  clearShellShootLongPress();
+  clearShellShootAnimation();
+  clearReactionAnimation();
+  clearAmbientAnimation();
+  if (!setMascotFrame(mascot, FRAMES.shellShoot[frameIndex])) {
+    isReacting = false;
+    return;
+  }
+
+  shellShootTimerId = window.setInterval(() => {
+    frameIndex += 1;
+
+    if (frameIndex >= FRAMES.shellShoot.length) {
+      clearShellShootAnimation();
+      isReacting = false;
+      startAmbientAnimation(mascot);
+      return;
+    }
+
+    if (!setMascotFrame(mascot, FRAMES.shellShoot[frameIndex])) {
+      clearShellShootAnimation();
+      isReacting = false;
+    }
+  }, SHELL_SHOOT_FRAME_INTERVAL_MS);
+}
+
 function createOverlayHost() {
   const existingHost = document.getElementById(OVERLAY_HOST_ID);
 
@@ -1021,24 +1151,32 @@ function renderOverlay() {
   mascotStage.className = "turtle-overlay-mascot-stage";
   applyTurtleSizeStyle(mascot, overlaySettings.turtleSize, mascotStage);
   overlay.style.width = mascotStage.style.width;
-  mascotStage.addEventListener("pointerenter", () => playNeckReaction(mascot));
+  mascotStage.addEventListener("pointerenter", (event) => {
+    if (isPointerInsideMascotHitArea(event, mascot)) {
+      rememberMascotHoverHit(event);
+      playNeckReaction(mascot);
+    }
+  });
   mascotStage.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) {
+    if (
+      event.button !== 0 ||
+      (!isPointerInsideMascotHitArea(event, mascot) && !isRecentMascotHoverHit(event))
+    ) {
       return;
     }
 
     host.dataset.edgeSnapped = "false";
     const overlayRect = overlay.getBoundingClientRect();
     const bubbleHeight = bubble?.offsetHeight ?? 0;
-    isDragging = true;
+    isPointerDownOnMascot = true;
+    isDragging = false;
     hasDragged = false;
+    hasPlayedShellShoot = false;
     isReacting = false;
     clearReactionAnimation();
     clearAmbientAnimation();
-    mascotStage.dataset.dragging = "true";
-    lastDragFramePath = FRAMES.drag[4];
-    lastDragFrameChangedAt = 0;
-    setMascotFrame(mascot, lastDragFramePath);
+    clearShellShootAnimation();
+    clearShellShootLongPress();
     dragOffset = {
       x: event.clientX - overlayRect.left,
       y: event.clientY - (overlayRect.top + bubbleHeight)
@@ -1047,17 +1185,37 @@ function renderOverlay() {
       x: event.clientX,
       y: event.clientY
     };
-    mascotStage.setPointerCapture(event.pointerId);
+    shellShootLongPressTimerId = window.setTimeout(() => {
+      if (!isPointerDownOnMascot || hasDragged || isDragging) {
+        return;
+      }
+
+      playShellShootInteraction(mascot);
+    }, SHELL_SHOOT_LONG_PRESS_MS);
+    try {
+      mascotStage.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic validation events and some browser edge cases may not allow capture.
+    }
     event.preventDefault();
   });
   mascotStage.addEventListener("pointermove", (event) => {
-    if (!isDragging) {
+    if (!isPointerDownOnMascot || hasPlayedShellShoot) {
       return;
     }
 
     const dragDistance = Math.hypot(event.clientX - dragStart.x, event.clientY - dragStart.y);
-    if (dragDistance < 4 && !hasDragged) {
+    if (dragDistance < DRAG_START_DISTANCE_PX && !hasDragged) {
       return;
+    }
+
+    if (!isDragging) {
+      clearShellShootLongPress();
+      isDragging = true;
+      mascotStage.dataset.dragging = "true";
+      lastDragFramePath = FRAMES.drag[4];
+      lastDragFrameChangedAt = 0;
+      setMascotFrame(mascot, lastDragFramePath);
     }
 
     hasDragged = true;
@@ -1083,13 +1241,21 @@ function renderOverlay() {
     dragPosition = { x, y: stageTop };
   });
   mascotStage.addEventListener("pointerup", (event) => {
-    if (!isDragging) {
+    if (!isPointerDownOnMascot) {
       return;
     }
 
+    clearShellShootLongPress();
+    isPointerDownOnMascot = false;
     isDragging = false;
     mascotStage.dataset.dragging = "false";
-    mascotStage.releasePointerCapture(event.pointerId);
+    if (mascotStage.hasPointerCapture(event.pointerId)) {
+      mascotStage.releasePointerCapture(event.pointerId);
+    }
+
+    if (hasPlayedShellShoot) {
+      return;
+    }
 
     if (!hasDragged) {
       startAmbientAnimation(mascot);
@@ -1104,8 +1270,29 @@ function renderOverlay() {
       didJustDrag = false;
     }, 0);
   });
-  mascotStage.addEventListener("click", () => {
-    if (isDragging || didJustDrag) {
+  mascotStage.addEventListener("pointercancel", (event) => {
+    if (!isPointerDownOnMascot) {
+      return;
+    }
+
+    clearShellShootLongPress();
+    isPointerDownOnMascot = false;
+    isDragging = false;
+    hasDragged = false;
+    hasPlayedShellShoot = false;
+    mascotStage.dataset.dragging = "false";
+    if (mascotStage.hasPointerCapture(event.pointerId)) {
+      mascotStage.releasePointerCapture(event.pointerId);
+    }
+    startAmbientAnimation(mascot);
+  });
+  mascotStage.addEventListener("click", (event) => {
+    if (
+      isDragging ||
+      didJustDrag ||
+      hasPlayedShellShoot ||
+      (!isPointerInsideMascotHitArea(event, mascot) && !isRecentMascotHoverHit(event))
+    ) {
       return;
     }
 
@@ -1210,10 +1397,14 @@ function hideOverlay() {
   }
 
   clearReactionAnimation();
+  clearShellShootAnimation();
+  clearShellShootLongPress();
   clearAmbientAnimation();
   clearStretchTimer();
   clearSuccessTimer();
   isReacting = false;
+  isPointerDownOnMascot = false;
+  hasPlayedShellShoot = false;
   overlayState = {
     ...overlayState,
     visibilityState: "hidden",
