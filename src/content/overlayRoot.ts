@@ -17,8 +17,8 @@ const REACTION_FRAME_INTERVAL_MS = 70;
 const DRAG_FRAME_INTERVAL_MS = 80;
 const SHELL_SHOOT_FRAME_INTERVAL_MS = 120;
 const NECK_REACTION_COOLDOWN_MS = 2400;
-const SHELL_SHOOT_LONG_PRESS_MS = 560;
-const DRAG_START_DISTANCE_PX = 6;
+const SHELL_SHOOT_LONG_PRESS_MS = 480;
+const DRAG_START_DISTANCE_PX = 8;
 const RECENT_MASCOT_HOVER_HIT_MS = 700;
 const RECENT_MASCOT_HOVER_HIT_RADIUS_PX = 10;
 const STRETCH_TOTAL_SECONDS = 30;
@@ -418,7 +418,7 @@ function normalizeCustomPosition(value: unknown) {
 
   return {
     xPercent: Math.min(100, Math.max(0, candidate.xPercent)),
-    yPercent: Math.min(95, Math.max(5, candidate.yPercent))
+    yPercent: Math.min(95, Math.max(0, candidate.yPercent))
   };
 }
 
@@ -1349,7 +1349,7 @@ function renderOverlay() {
     const storedStageTop = (overlaySettings.customPosition.yPercent / 100) * window.innerHeight;
     const stageTop = Math.min(
       Math.max(0, window.innerHeight - stageHeight),
-      Math.max(bubbleHeight, storedStageTop)
+      Math.max(0, storedStageTop)
     );
 
     if (host.dataset.edgeSnapped === "true") {
