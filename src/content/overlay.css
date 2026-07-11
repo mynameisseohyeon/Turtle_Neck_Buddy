@@ -375,6 +375,19 @@
   transform: scaleX(-1);
 }
 
+/* The source frame's guide line and outer hand belong beyond the viewport edge. */
+:host([data-edge-snapped="true"][data-position="bottom-right"])
+  .turtle-overlay[data-state="peeking"]
+  .turtle-overlay-mascot {
+  transform: translateX(12px);
+}
+
+:host([data-edge-snapped="true"][data-position="bottom-left"])
+  .turtle-overlay[data-state="peeking"]
+  .turtle-overlay-mascot {
+  transform: translateX(-12px) scaleX(-1);
+}
+
 :host([data-position="bottom-left"]) .turtle-overlay-mascot-stage[data-dragging="true"] .turtle-overlay-mascot {
   transform: translateY(-3px) scaleX(-1);
 }

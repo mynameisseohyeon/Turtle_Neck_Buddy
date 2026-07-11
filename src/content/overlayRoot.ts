@@ -35,7 +35,7 @@ const BASE_TURTLE_HEIGHT_PX = 263;
 const BASE_TURTLE_STAGE_WIDTH_PX = 470;
 const TURTLE_STAGE_HEADROOM_PX = 10;
 const MAX_TURTLE_FRAME_SCALE = 1.3;
-const EDGE_SNAP_THRESHOLD_PX = 24;
+const EDGE_SNAP_THRESHOLD_PX = 0;
 const OVERLAY_LANGUAGE_OPTIONS: OverlayLanguage[] = ["en", "ko", "ja", "zh", "es"];
 const OVERLAY_LANGUAGE_FLAGS: Record<OverlayLanguage, { flag: string; label: string }> = {
   en: { flag: "🇺🇸", label: "English" },
@@ -1009,7 +1009,8 @@ function renderOverlay() {
   const overlay = document.createElement("section");
   overlay.dataset.overlayApp = "true";
   overlay.className = "turtle-overlay";
-  overlay.dataset.state = currentState;
+  overlay.dataset.state =
+    currentState === "peeking" && host.dataset.edgeSnapped === "false" ? "idle" : currentState;
   overlay.setAttribute("aria-hidden", "true");
 
   const mascot = document.createElement("img");
