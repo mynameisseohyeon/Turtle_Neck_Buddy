@@ -519,6 +519,9 @@ function setMascotFrame(mascot: HTMLImageElement, framePath: string) {
   }
 
   mascot.dataset.framePath = framePath;
+  if (!framePath.includes("/shell_shoot/")) {
+    delete mascot.dataset.shellShootDirection;
+  }
   applyMascotFrameSize(mascot, framePath);
   mascot.src = frameUrl;
   return true;
@@ -1014,6 +1017,11 @@ function playShellShootInteraction(mascot: HTMLImageElement) {
   let frameIndex = 0;
   hasPlayedShellShoot = true;
   isReacting = true;
+  const mascotRect = mascot.getBoundingClientRect();
+  const host = document.getElementById(OVERLAY_HOST_ID);
+  const shouldShootLeft =
+    host?.dataset.position === "bottom-left" || mascotRect.left + mascotRect.width / 2 < window.innerWidth / 2;
+  mascot.dataset.shellShootDirection = shouldShootLeft ? "left" : "right";
   clearShellShootLongPress();
   clearShellShootAnimation();
   clearReactionAnimation();
