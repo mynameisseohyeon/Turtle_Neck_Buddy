@@ -18,6 +18,8 @@
 }
 
 .turtle-overlay {
+  position: relative;
+  z-index: 1;
   display: grid;
   justify-items: end;
   width: 470px;

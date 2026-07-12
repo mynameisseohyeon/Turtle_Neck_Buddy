@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { OnboardingPanel } from "./components/OnboardingPanel";
 import {
   Bell,
   CalendarDays,
@@ -27,6 +28,7 @@ import {
   REMINDER_INTERVAL_STEP_MINUTES,
   normalizeOverlaySettings
 } from "../shared/overlaySettings";
+import { ONBOARDING_COMPLETED_STORAGE_KEY, getOnboardingCompleted } from "../shared/onboarding";
 import {
   addStretchCompletion,
   DEFAULT_STRETCH_RECORDS,
@@ -116,6 +118,7 @@ export function App() {
   const [isPaused, setIsPaused] = useState(false);
   const [now, setNow] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
 
   const todayCount = getTodayCompletedCount(records, now);
@@ -133,6 +136,14 @@ export function App() {
     const timerId = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(timerId);
   }, []);
+
+  useEffect(() => {
+    if (!isOnboardingOpen || !canUseExtensionApi()) {
+      return;
+    }
+
+    void sendBackgroundMessage({ type: "HIDE_OVERLAY_ON_CURRENT_TAB" });
+  }, [isOnboardingOpen]);
 
   useEffect(() => {
     if (view !== "timer" || isPaused || remainingSeconds <= 0) {
@@ -153,17 +164,19 @@ export function App() {
 
   useEffect(() => {
     if (!canUseExtensionApi()) {
+      setIsOnboardingOpen(true);
       setIsLoading(false);
       return;
     }
 
     void chrome.storage.local
-      .get([OVERLAY_SETTINGS_STORAGE_KEY, STRETCH_RECORDS_STORAGE_KEY])
+      .get([ONBOARDING_COMPLETED_STORAGE_KEY, OVERLAY_SETTINGS_STORAGE_KEY, STRETCH_RECORDS_STORAGE_KEY])
       .then((stored) => {
         const storedSettings = normalizeOverlaySettings(stored[OVERLAY_SETTINGS_STORAGE_KEY]);
         setSettings(storedSettings);
         setDraftSettings(storedSettings);
         setRecords(normalizeStretchRecords(stored[STRETCH_RECORDS_STORAGE_KEY]));
+        setIsOnboardingOpen(!getOnboardingCompleted(stored[ONBOARDING_COMPLETED_STORAGE_KEY]));
       })
       .catch(() => setFeedback("설정을 불러오지 못했어요."))
       .finally(() => setIsLoading(false));
@@ -208,10 +221,21 @@ export function App() {
     setFeedback("5분 뒤에 다시 알려드릴게요.");
   }
 
-  function openRoutine() {
+  async function openRoutine() {
     setRemainingSeconds(STRETCH_TOTAL_SECONDS);
     setIsPaused(false);
-    setView("routine");
+    if (!canUseExtensionApi()) {
+      setView("routine");
+      return;
+    }
+
+    const response = await sendBackgroundMessage({ type: "START_STRETCH_ON_CURRENT_TAB" });
+    if (response.type === "OVERLAY_PREVIEW_RESULT" && response.payload.ok) {
+      window.close();
+      return;
+    }
+
+    setFeedback("현재 웹페이지에 거북이를 띄우지 못했어요. 일반 웹페이지에서 다시 시도해주세요.");
   }
 
   function startRoutine() {
@@ -232,8 +256,37 @@ export function App() {
     }
   }
 
+  async function completeOnboarding(intervalMinutes: number) {
+    const now = new Date();
+    const nextSettings = {
+      ...settings,
+      overlayEnabled: true,
+      reminderIntervalMinutes: intervalMinutes,
+      lastReminderShownAt: now.toISOString(),
+      nextReminderAt: new Date(now.getTime() + intervalMinutes * 60_000).toISOString()
+    };
+    setSettings(nextSettings);
+    setDraftSettings(nextSettings);
+    setIsOnboardingOpen(false);
+
+    if (!canUseExtensionApi()) {
+      return;
+    }
+
+    await chrome.storage.local.set({
+      [ONBOARDING_COMPLETED_STORAGE_KEY]: true,
+      [OVERLAY_SETTINGS_STORAGE_KEY]: nextSettings
+    });
+    await sendBackgroundMessage({ type: "HIDE_OVERLAY_ON_CURRENT_TAB" });
+    window.close();
+  }
+
   if (isLoading) {
     return <main className="detail-panel-shell loading-panel" aria-label="설정 불러오는 중" />;
+  }
+
+  if (isOnboardingOpen) {
+    return <OnboardingPanel reminderIntervalMinutes={settings.reminderIntervalMinutes} onComplete={completeOnboarding} />;
   }
 
   return (
@@ -289,7 +342,7 @@ export function App() {
           </article>
 
           <div className="primary-actions">
-            <button type="button" className="primary-button" onClick={openRoutine}><RotateCcw size={17} />지금 스트레칭</button>
+            <button type="button" className="primary-button" onClick={() => void openRoutine()}><RotateCcw size={17} />지금 스트레칭</button>
             <button type="button" className="secondary-button" onClick={() => void snoozeReminder()}><Clock3 size={17} />5분 뒤 알림</button>
           </div>
 
@@ -389,15 +442,6 @@ export function App() {
           <p className="eyebrow">Reminder</p>
           <h1 id="settings-title">스트레칭 설정</h1>
           <div className="form-stack">
-            <label className="form-row toggle-row">
-              <Bell size={20} />
-              <span><strong>알림</strong><small>설정한 시간이 되면 거북이가 나타나요.</small></span>
-              <input
-                type="checkbox"
-                checked={draftSettings.overlayEnabled}
-                onChange={(event) => setDraftSettings({ ...draftSettings, overlayEnabled: event.target.checked })}
-              />
-            </label>
             <div className="form-row">
               <SlidersHorizontal size={20} />
               <span><strong>알림 간격</strong><small>10분 단위로 조절할 수 있어요.</small></span>
@@ -418,6 +462,15 @@ export function App() {
               <span><strong>다음 알림 시간</strong><small>저장한 시점부터 새 간격을 적용해요.</small></span>
               <time>{getNextReminderAt(draftSettings, now).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</time>
             </div>
+            <label className="form-row toggle-row">
+              <Bell size={20} />
+              <span><strong>알림</strong><small>설정한 시간이 되면 거북이가 나타나요.</small></span>
+              <input
+                type="checkbox"
+                checked={draftSettings.overlayEnabled}
+                onChange={(event) => setDraftSettings({ ...draftSettings, overlayEnabled: event.target.checked })}
+              />
+            </label>
             <div className="form-row time-range-row">
               <Clock3 size={20} />
               <span><strong>방해 금지 시간</strong><small>이 시간에는 자동으로 나타나지 않아요.</small></span>

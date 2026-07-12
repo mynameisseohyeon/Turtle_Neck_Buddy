@@ -9,9 +9,8 @@ import { INITIAL_OVERLAY_VIEW_STATE, type OverlayViewState } from "../shared/ove
 const OVERLAY_HOST_ID = "turtle-neck-buddy-overlay-root";
 const OVERLAY_SETTINGS_STORAGE_KEY = "turtle-neck-buddy-overlay-settings";
 const STRETCH_RECORDS_STORAGE_KEY = "turtle-neck-buddy-stretch-records";
-const IDLE_FRAME_INTERVAL_MS = 520;
+const QUIET_FRAME_INTERVAL_MS = 520;
 const PEEKING_FRAME_INTERVAL_MS = 180;
-const ALERT_FRAME_INTERVAL_MS = 90;
 const STRETCH_FRAME_INTERVAL_MS = 320;
 const SUCCESS_FRAME_INTERVAL_MS = 180;
 const REACTION_FRAME_INTERVAL_MS = 70;
@@ -25,7 +24,7 @@ const RECENT_MASCOT_HOVER_HIT_RADIUS_PX = 10;
 const STRETCH_TOTAL_SECONDS = 30;
 const STRETCH_PHASE_SECONDS = 10;
 const SUCCESS_VISIBLE_MS = 3500;
-const INITIAL_NOTICE_VISIBLE_MS = 4500;
+const INITIAL_NOTICE_VISIBLE_MS = 12000;
 const MIN_REMINDER_INTERVAL_MINUTES = 10;
 const MAX_REMINDER_INTERVAL_MINUTES = 180;
 const REMINDER_INTERVAL_STEP_MINUTES = 10;
@@ -73,12 +72,6 @@ const WAITING_OVERLAY_STATE: OverlayViewState = {
 };
 
 const FRAMES = {
-  idle: [
-    "assets/turtle/frames/idle/idle_01.png",
-    "assets/turtle/frames/idle/idle_02.png",
-    "assets/turtle/frames/idle/idle_03.png",
-    "assets/turtle/frames/idle/idle_04.png"
-  ],
   neckIn: [
     "assets/turtle/frames/neck_in/neck_in_01.png",
     "assets/turtle/frames/neck_in/neck_in_02.png",
@@ -99,11 +92,11 @@ const FRAMES = {
     "assets/turtle/frames/neck_out/neck_out_07.png",
     "assets/turtle/frames/neck_out/neck_out_08.png"
   ],
-  alert: [
-    "assets/turtle/frames/alert/alert_01.png",
-    "assets/turtle/frames/alert/alert_02.png",
-    "assets/turtle/frames/alert/alert_03.png",
-    "assets/turtle/frames/alert/alert_04.png"
+  quiet: [
+    "assets/turtle/frames/quiet/quiet_01.png",
+    "assets/turtle/frames/quiet/quiet_02.png",
+    "assets/turtle/frames/quiet/quiet_03.png",
+    "assets/turtle/frames/quiet/quiet_04.png"
   ],
   tired: [
     "assets/turtle/frames/tired/tired_01.png",
@@ -173,8 +166,7 @@ const PEEKING_AMBIENT_FRAMES = [
 ];
 
 const FRAME_VISUAL_SCALES = {
-  idle: 1.3,
-  alert: 1.3,
+  quiet: 1.3,
   tired: 1.2,
   drag: 1,
   shellShoot: 1,
@@ -496,12 +488,8 @@ function applyTurtleSizeStyle(
 }
 
 function getMascotFrameScale(framePath: string) {
-  if (framePath.includes("/idle/")) {
-    return FRAME_VISUAL_SCALES.idle;
-  }
-
-  if (framePath.includes("/alert/")) {
-    return FRAME_VISUAL_SCALES.alert;
+  if (framePath.includes("/quiet/")) {
+    return FRAME_VISUAL_SCALES.quiet;
   }
 
   if (framePath.includes("/tired/")) {
@@ -675,6 +663,10 @@ function createPingPongFrames<T>(frames: readonly T[]) {
 }
 
 function getAmbientFrames() {
+  if (isInitialScheduleNotice) {
+    return createPingPongFrames(FRAMES.quiet);
+  }
+
   if (overlayState.visibilityState === "success") {
     return createPingPongFrames(FRAMES.success);
   }
@@ -683,20 +675,16 @@ function getAmbientFrames() {
     return createPingPongFrames(getStretchPhaseFrames());
   }
 
-  if (overlayState.visibilityState === "alert") {
-    return FRAMES.alert;
-  }
-
   const isFreelyPositioned =
     overlaySettings.customPosition !== null &&
     overlaySettings.customPosition.xPercent !== 0 &&
     overlaySettings.customPosition.xPercent !== 100;
-  return isFreelyPositioned ? createPingPongFrames(FRAMES.idle) : PEEKING_AMBIENT_FRAMES;
+  return isFreelyPositioned ? createPingPongFrames(FRAMES.quiet) : PEEKING_AMBIENT_FRAMES;
 }
 
 function getAmbientFrameInterval() {
-  if (overlayState.visibilityState === "alert") {
-    return ALERT_FRAME_INTERVAL_MS;
+  if (isInitialScheduleNotice) {
+    return QUIET_FRAME_INTERVAL_MS;
   }
 
   if (overlayState.visibilityState === "stretch") {
@@ -711,7 +699,7 @@ function getAmbientFrameInterval() {
     overlaySettings.customPosition !== null &&
     overlaySettings.customPosition.xPercent !== 0 &&
     overlaySettings.customPosition.xPercent !== 100;
-  return isFreelyPositioned ? IDLE_FRAME_INTERVAL_MS : PEEKING_FRAME_INTERVAL_MS;
+  return isFreelyPositioned ? QUIET_FRAME_INTERVAL_MS : PEEKING_FRAME_INTERVAL_MS;
 }
 
 function clearAmbientAnimation() {
@@ -1253,6 +1241,7 @@ function renderOverlay() {
     currentState === "peeking" && host.dataset.edgeSnapped === "false" ? "idle" : currentState;
   overlay.setAttribute("aria-hidden", "true");
 
+
   const mascot = document.createElement("img");
   mascot.className = "turtle-overlay-mascot";
   mascot.alt = "";
@@ -1516,14 +1505,14 @@ function showInitialScheduleNotice(reminderIntervalMinutes: number) {
   clearInitialNoticeTimer();
   isReminderDue = false;
   isInitialScheduleNotice = true;
-  const interval = normalizeReminderIntervalMinutes(reminderIntervalMinutes);
   const messages: Record<OverlayLanguage, string> = {
-    en: `I'll remind you to stretch in ${interval} minutes!`,
-    ko: `${interval}분 뒤에 스트레칭 시간을 안내해줄게!`,
-    ja: `${interval}分後にストレッチをお知らせするね！`,
-    zh: `${interval}分钟后提醒你伸展！`,
-    es: `Te avisaré para estirarte en ${interval} minutos!`
+    en: "Click the Turtle Neck Buddy icon above to get started!",
+    ko: "오른쪽 위 Turtle Neck Buddy 아이콘을 클릭해 시작해요!",
+    ja: "右上のTurtle Neck Buddyアイコンをクリックして始めましょう！",
+    zh: "点击右上角的Turtle Neck Buddy图标开始吧！",
+    es: "Haz clic en el icono de Turtle Neck Buddy para empezar!"
   };
+  void reminderIntervalMinutes;
   overlayState = {
     visibilityState: "alert",
     turtleState: "idle",
@@ -1880,6 +1869,10 @@ try {
 
     if (message.type === "SHOW_INITIAL_SCHEDULE_NOTICE") {
       showInitialScheduleNotice(message.payload.reminderIntervalMinutes);
+    }
+
+    if (message.type === "START_STRETCH_ROUTINE") {
+      startStretchRoutine();
     }
 
     if (message.type === "HIDE_STRETCH_REMINDER") {

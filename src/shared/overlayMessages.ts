@@ -48,6 +48,9 @@ export type BackgroundToOverlayMessage =
       };
     }
   | {
+      type: "START_STRETCH_ROUTINE";
+    }
+  | {
       type: "HIDE_STRETCH_REMINDER";
     };
 
@@ -89,6 +92,12 @@ export type PopupToBackgroundMessage =
       payload: {
         snoozeMinutes: number;
       };
+    }
+  | {
+      type: "START_STRETCH_ON_CURRENT_TAB";
+    }
+  | {
+      type: "HIDE_OVERLAY_ON_CURRENT_TAB";
     };
 
 export type BackgroundToPopupMessage =

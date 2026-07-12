@@ -180,19 +180,6 @@ async function getCurrentSiteOverlayPermission(): Promise<CurrentSiteOverlayPerm
 }
 
 async function showOverlayInActiveTab() {
-  const tab = await getActiveTab();
-  const supportedOrigin = getSupportedOrigin(tab?.url);
-
-  if (!tab?.id || !supportedOrigin) {
-    return { ok: false, reason: "unsupported-url" as const };
-  }
-
-  const granted = await chrome.permissions.contains({ origins: [supportedOrigin.originPattern] });
-
-  if (!granted) {
-    return { ok: false, reason: "permission-required" as const };
-  }
-
   const message: BackgroundToOverlayMessage = {
     type: "SHOW_STRETCH_REMINDER",
     payload: {
@@ -200,6 +187,26 @@ async function showOverlayInActiveTab() {
       triggeredAt: new Date().toISOString()
     }
   };
+  return sendOverlayMessageToActiveTab(message, false);
+}
+
+async function sendOverlayMessageToActiveTab(
+  message: BackgroundToOverlayMessage,
+  requirePermission: boolean
+) {
+  const tab = await getActiveTab();
+  const supportedOrigin = getSupportedOrigin(tab?.url);
+
+  if (!tab?.id || !supportedOrigin) {
+    return { ok: false, reason: "unsupported-url" as const };
+  }
+
+  if (requirePermission) {
+    const granted = await chrome.permissions.contains({ origins: [supportedOrigin.originPattern] });
+    if (!granted) {
+      return { ok: false, reason: "permission-required" as const };
+    }
+  }
 
   try {
     await chrome.tabs.sendMessage(tab.id, message);
@@ -219,27 +226,11 @@ async function showOverlayInActiveTab() {
 }
 
 async function showInitialScheduleNotice(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
-  const tab = await getActiveTab();
-  const supportedOrigin = getSupportedOrigin(tab?.url);
-  if (!tab?.id || !supportedOrigin) {
-    return;
-  }
-
   const message: BackgroundToOverlayMessage = {
     type: "SHOW_INITIAL_SCHEDULE_NOTICE",
     payload: { reminderIntervalMinutes: settings.reminderIntervalMinutes }
   };
-
-  try {
-    await chrome.tabs.sendMessage(tab.id, message);
-  } catch {
-    try {
-      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: [OVERLAY_SCRIPT_FILE] });
-      await chrome.tabs.sendMessage(tab.id, message);
-    } catch {
-      // The welcome notice is best-effort on pages where host access is not available yet.
-    }
-  }
+  await sendOverlayMessageToActiveTab(message, false);
 }
 
 async function deliverScheduledReminder(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
@@ -362,6 +353,20 @@ chrome.runtime.onMessage.addListener((message: PopupToBackgroundMessage, _sender
   if (message.type === "SNOOZE_STRETCH_REMINDER") {
     void snoozeReminder(message.payload.snoozeMinutes, _sender.tab?.id).then(() => {
       sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload: { ok: true } });
+    });
+    return true;
+  }
+
+  if (message.type === "START_STRETCH_ON_CURRENT_TAB") {
+    void sendOverlayMessageToActiveTab({ type: "START_STRETCH_ROUTINE" }, false).then((payload) => {
+      sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload });
+    });
+    return true;
+  }
+
+  if (message.type === "HIDE_OVERLAY_ON_CURRENT_TAB") {
+    void sendOverlayMessageToActiveTab({ type: "HIDE_STRETCH_REMINDER" }, false).then((payload) => {
+      sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload });
     });
     return true;
   }
