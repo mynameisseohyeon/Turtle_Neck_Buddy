@@ -14,6 +14,11 @@
 
 ---
 
+<table> <tr> <td align="center"> <img src="https://github.com/user-attachments/assets/63d59e9c-192a-4aaa-bec2-762e72aac177" alt="온보딩 화면 1" width="100%" /> </td> <td align="center"> <img src="https://github.com/user-attachments/assets/94364f62-c2f4-4756-9b02-a33892ca2496" alt="온보딩 화면 2" width="100%" /> </td> </tr> <tr> <td align="center"> <img src="https://github.com/user-attachments/assets/d9053151-ee54-44af-90cc-280f0d111555" alt="온보딩 화면 3" width="100%" /> </td> <td align="center"> <img src="https://github.com/user-attachments/assets/9dc99fe6-8fc1-43e5-a193-1771fb94a3bf" alt="온보딩 화면 4" width="100%" /> </td> </tr> </table>
+
+
+---
+
 ## 주요 기능
 
 * **도트풍 애니메이션 인터랙션**
