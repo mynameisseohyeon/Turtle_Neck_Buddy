@@ -78,7 +78,6 @@ export function OnboardingPanel({ reminderIntervalMinutes, onComplete }: Onboard
 
       {step === 3 ? (
         <section className="onboarding-step onboarding-finish">
-          <img className="onboarding-turtle" src={`${DETAIL_ASSET_ROOT}/success_cheer.png`} alt="기뻐하는 거북이" />
           <p className="onboarding-kicker">준비 완료</p>
           <h1>좋아요!<br />{selectedInterval}분 뒤에 다시 봐요</h1>
           <p className="onboarding-copy">그동안에는 화면에 나타나지 않고 조용히 기다릴게요.</p>

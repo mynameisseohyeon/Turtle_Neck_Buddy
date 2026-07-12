@@ -277,7 +277,7 @@ export function App() {
       [ONBOARDING_COMPLETED_STORAGE_KEY]: true,
       [OVERLAY_SETTINGS_STORAGE_KEY]: nextSettings
     });
-    await sendBackgroundMessage({ type: "COMPLETE_ONBOARDING", payload: { reminderIntervalMinutes: intervalMinutes } });
+    await sendBackgroundMessage({ type: "HIDE_OVERLAY_ON_CURRENT_TAB" });
     window.close();
   }
 

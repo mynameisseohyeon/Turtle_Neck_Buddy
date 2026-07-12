@@ -357,17 +357,6 @@ chrome.runtime.onMessage.addListener((message: PopupToBackgroundMessage, _sender
     return true;
   }
 
-  if (message.type === "COMPLETE_ONBOARDING") {
-    const overlayMessage: BackgroundToOverlayMessage = {
-      type: "SHOW_ONBOARDING_COMPLETE",
-      payload: { reminderIntervalMinutes: message.payload.reminderIntervalMinutes }
-    };
-    void sendOverlayMessageToActiveTab(overlayMessage, false).then((payload) => {
-      sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload });
-    });
-    return true;
-  }
-
   if (message.type === "START_STRETCH_ON_CURRENT_TAB") {
     void sendOverlayMessageToActiveTab({ type: "START_STRETCH_ROUTINE" }, false).then((payload) => {
       sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload });

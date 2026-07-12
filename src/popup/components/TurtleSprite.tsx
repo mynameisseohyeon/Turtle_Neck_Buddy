@@ -3,16 +3,16 @@ import type { TurtleState } from "../../shared/types";
 
 const framesByState: Record<TurtleState, string[]> = {
   idle: [
-    "/assets/turtle/frames/idle/idle_01.png",
-    "/assets/turtle/frames/idle/idle_02.png",
-    "/assets/turtle/frames/idle/idle_03.png",
-    "/assets/turtle/frames/idle/idle_04.png"
+    "/assets/turtle/frames/quiet/quiet_01.png",
+    "/assets/turtle/frames/quiet/quiet_02.png",
+    "/assets/turtle/frames/quiet/quiet_03.png",
+    "/assets/turtle/frames/quiet/quiet_04.png"
   ],
   alert: [
-    "/assets/turtle/frames/alert/alert_01.png",
-    "/assets/turtle/frames/alert/alert_02.png",
-    "/assets/turtle/frames/alert/alert_03.png",
-    "/assets/turtle/frames/alert/alert_04.png"
+    "/assets/turtle/frames/quiet/quiet_01.png",
+    "/assets/turtle/frames/quiet/quiet_02.png",
+    "/assets/turtle/frames/quiet/quiet_03.png",
+    "/assets/turtle/frames/quiet/quiet_04.png"
   ],
   stretch: [
     "/assets/turtle/frames/stretch/stretch_01.png",

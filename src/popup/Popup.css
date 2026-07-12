@@ -978,9 +978,8 @@ button {
   font-weight: 900;
 }
 
-.onboarding-finish .onboarding-turtle {
-  height: 190px;
-  margin-top: 8px;
+.onboarding-finish {
+  padding-top: 128px;
 }
 
 .onboarding-finish .onboarding-primary {
