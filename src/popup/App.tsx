@@ -138,6 +138,14 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (!isOnboardingOpen || !canUseExtensionApi()) {
+      return;
+    }
+
+    void sendBackgroundMessage({ type: "HIDE_OVERLAY_ON_CURRENT_TAB" });
+  }, [isOnboardingOpen]);
+
+  useEffect(() => {
     if (view !== "timer" || isPaused || remainingSeconds <= 0) {
       return;
     }

@@ -675,6 +675,10 @@ function createPingPongFrames<T>(frames: readonly T[]) {
 }
 
 function getAmbientFrames() {
+  if (isInitialScheduleNotice) {
+    return createPingPongFrames(FRAMES.idle);
+  }
+
   if (overlayState.visibilityState === "success") {
     return createPingPongFrames(FRAMES.success);
   }
@@ -695,6 +699,10 @@ function getAmbientFrames() {
 }
 
 function getAmbientFrameInterval() {
+  if (isInitialScheduleNotice) {
+    return IDLE_FRAME_INTERVAL_MS;
+  }
+
   if (overlayState.visibilityState === "alert") {
     return ALERT_FRAME_INTERVAL_MS;
   }
@@ -1221,6 +1229,7 @@ function renderOverlay() {
 
   clearSettingsCountdown();
   const shadowRoot = createOverlayHost();
+  shadowRoot.querySelector("[data-intro-backdrop]")?.remove();
   const currentState = overlayState.visibilityState;
   const host = shadowRoot.host as HTMLElement;
   host.dataset.position = overlaySettings.overlayPosition;
@@ -1252,6 +1261,13 @@ function renderOverlay() {
   overlay.dataset.state =
     currentState === "peeking" && host.dataset.edgeSnapped === "false" ? "idle" : currentState;
   overlay.setAttribute("aria-hidden", "true");
+
+  if (isInitialScheduleNotice) {
+    const backdrop = document.createElement("div");
+    backdrop.dataset.introBackdrop = "true";
+    backdrop.className = "turtle-overlay-intro-backdrop";
+    shadowRoot.append(backdrop);
+  }
 
   const mascot = document.createElement("img");
   mascot.className = "turtle-overlay-mascot";
@@ -1525,7 +1541,7 @@ function showInitialScheduleNotice(reminderIntervalMinutes: number) {
   };
   void reminderIntervalMinutes;
   overlayState = {
-    visibilityState: "peeking",
+    visibilityState: "alert",
     turtleState: "idle",
     message: messages[overlaySettings.language]
   };

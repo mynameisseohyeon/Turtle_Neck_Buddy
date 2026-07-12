@@ -375,5 +375,12 @@ chrome.runtime.onMessage.addListener((message: PopupToBackgroundMessage, _sender
     return true;
   }
 
+  if (message.type === "HIDE_OVERLAY_ON_CURRENT_TAB") {
+    void sendOverlayMessageToActiveTab({ type: "HIDE_STRETCH_REMINDER" }, false).then((payload) => {
+      sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload });
+    });
+    return true;
+  }
+
   return undefined;
 });

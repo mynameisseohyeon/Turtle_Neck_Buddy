@@ -107,6 +107,9 @@ export type PopupToBackgroundMessage =
     }
   | {
       type: "START_STRETCH_ON_CURRENT_TAB";
+    }
+  | {
+      type: "HIDE_OVERLAY_ON_CURRENT_TAB";
     };
 
 export type BackgroundToPopupMessage =
