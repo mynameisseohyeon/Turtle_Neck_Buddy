@@ -48,6 +48,15 @@ export type BackgroundToOverlayMessage =
       };
     }
   | {
+      type: "SHOW_ONBOARDING_COMPLETE";
+      payload: {
+        reminderIntervalMinutes: number;
+      };
+    }
+  | {
+      type: "START_STRETCH_ROUTINE";
+    }
+  | {
       type: "HIDE_STRETCH_REMINDER";
     };
 
@@ -89,6 +98,15 @@ export type PopupToBackgroundMessage =
       payload: {
         snoozeMinutes: number;
       };
+    }
+  | {
+      type: "COMPLETE_ONBOARDING";
+      payload: {
+        reminderIntervalMinutes: number;
+      };
+    }
+  | {
+      type: "START_STRETCH_ON_CURRENT_TAB";
     };
 
 export type BackgroundToPopupMessage =

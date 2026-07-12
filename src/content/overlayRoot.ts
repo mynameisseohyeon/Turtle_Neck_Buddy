@@ -25,7 +25,7 @@ const RECENT_MASCOT_HOVER_HIT_RADIUS_PX = 10;
 const STRETCH_TOTAL_SECONDS = 30;
 const STRETCH_PHASE_SECONDS = 10;
 const SUCCESS_VISIBLE_MS = 3500;
-const INITIAL_NOTICE_VISIBLE_MS = 4500;
+const INITIAL_NOTICE_VISIBLE_MS = 12000;
 const MIN_REMINDER_INTERVAL_MINUTES = 10;
 const MAX_REMINDER_INTERVAL_MINUTES = 180;
 const REMINDER_INTERVAL_STEP_MINUTES = 10;
@@ -1516,21 +1516,46 @@ function showInitialScheduleNotice(reminderIntervalMinutes: number) {
   clearInitialNoticeTimer();
   isReminderDue = false;
   isInitialScheduleNotice = true;
-  const interval = normalizeReminderIntervalMinutes(reminderIntervalMinutes);
   const messages: Record<OverlayLanguage, string> = {
-    en: `I'll remind you to stretch in ${interval} minutes!`,
-    ko: `${interval}분 뒤에 스트레칭 시간을 안내해줄게!`,
-    ja: `${interval}分後にストレッチをお知らせするね！`,
-    zh: `${interval}分钟后提醒你伸展！`,
-    es: `Te avisaré para estirarte en ${interval} minutos!`
+    en: "Click the Turtle Neck Buddy icon above to get started!",
+    ko: "오른쪽 위 Turtle Neck Buddy 아이콘을 클릭해 시작해요!",
+    ja: "右上のTurtle Neck Buddyアイコンをクリックして始めましょう！",
+    zh: "点击右上角的Turtle Neck Buddy图标开始吧！",
+    es: "Haz clic en el icono de Turtle Neck Buddy para empezar!"
   };
+  void reminderIntervalMinutes;
   overlayState = {
-    visibilityState: "alert",
+    visibilityState: "peeking",
     turtleState: "idle",
     message: messages[overlaySettings.language]
   };
   renderOverlay();
   initialNoticeTimerId = window.setTimeout(() => hideOverlay(), INITIAL_NOTICE_VISIBLE_MS);
+}
+
+function showOnboardingComplete(reminderIntervalMinutes: number) {
+  if (overlayStopped) {
+    return;
+  }
+
+  clearInitialNoticeTimer();
+  isReminderDue = false;
+  isInitialScheduleNotice = true;
+  const interval = normalizeReminderIntervalMinutes(reminderIntervalMinutes);
+  const messages: Record<OverlayLanguage, string> = {
+    en: `All set. See you in ${interval} minutes!`,
+    ko: `설정 완료! ${interval}분 뒤에 다시 봐요!`,
+    ja: `設定完了！${interval}分後にまた会いましょう！`,
+    zh: `设置完成！${interval}分钟后见！`,
+    es: `Listo. Nos vemos en ${interval} minutos!`
+  };
+  overlayState = {
+    visibilityState: "peeking",
+    turtleState: "idle",
+    message: messages[overlaySettings.language]
+  };
+  renderOverlay();
+  initialNoticeTimerId = window.setTimeout(() => hideOverlay(), 4000);
 }
 
 function hideOverlay() {
@@ -1880,6 +1905,14 @@ try {
 
     if (message.type === "SHOW_INITIAL_SCHEDULE_NOTICE") {
       showInitialScheduleNotice(message.payload.reminderIntervalMinutes);
+    }
+
+    if (message.type === "SHOW_ONBOARDING_COMPLETE") {
+      showOnboardingComplete(message.payload.reminderIntervalMinutes);
+    }
+
+    if (message.type === "START_STRETCH_ROUTINE") {
+      startStretchRoutine();
     }
 
     if (message.type === "HIDE_STRETCH_REMINDER") {
