@@ -103,8 +103,7 @@ const FRAMES = {
     "assets/turtle/frames/tired/tired_02.png",
     "assets/turtle/frames/tired/tired_03.png",
     "assets/turtle/frames/tired/tired_04.png",
-    "assets/turtle/frames/tired/tired_05.png",
-    "assets/turtle/frames/tired/tired_06.png"
+    "assets/turtle/frames/tired/tired_05.png"
   ],
   drag: [
     "assets/turtle/frames/drag/drag_01.png",
@@ -166,14 +165,14 @@ const PEEKING_AMBIENT_FRAMES = [
 ];
 
 const FRAME_VISUAL_SCALES = {
-  quiet: 1.3,
-  tired: 1.2,
+  quiet: 1,
+  tired: 1,
   drag: 1,
   shellShoot: 1,
-  chinTuck: 0.91,
+  chinTuck: 1,
   neckTilt: 1,
-  shoulderRoll: 0.95,
-  success: 1.18,
+  shoulderRoll: 1,
+  success: 1,
   peeking: 1
 } as const;
 
