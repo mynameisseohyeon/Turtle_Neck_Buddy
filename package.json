@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "package:chrome": "node scripts/package-chrome-web-store.mjs",
+    "release:chrome": "pnpm run build && pnpm run package:chrome",
     "preview": "vite preview"
   },
   "dependencies": {
