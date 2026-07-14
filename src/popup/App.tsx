@@ -208,6 +208,9 @@ export function App() {
       nextReminderAt: new Date(Date.now() + draftSettings.reminderIntervalMinutes * 60_000).toISOString()
     };
     await persistSettings(nextSettings);
+    if (canUseExtensionApi()) {
+      await sendBackgroundMessage({ type: "SHOW_SCHEDULE_CONFIRMED_NOTICE" });
+    }
     setFeedback("설정을 저장했어요.");
     setView("main");
   }
@@ -277,7 +280,7 @@ export function App() {
       [ONBOARDING_COMPLETED_STORAGE_KEY]: true,
       [OVERLAY_SETTINGS_STORAGE_KEY]: nextSettings
     });
-    await sendBackgroundMessage({ type: "HIDE_OVERLAY_ON_CURRENT_TAB" });
+    await sendBackgroundMessage({ type: "SHOW_SCHEDULE_CONFIRMED_NOTICE" });
     window.close();
   }
 

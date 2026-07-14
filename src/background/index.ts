@@ -233,6 +233,14 @@ async function showInitialScheduleNotice(settings: Awaited<ReturnType<typeof get
   await sendOverlayMessageToActiveTab(message, false);
 }
 
+async function showScheduleConfirmedNotice(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
+  const message: BackgroundToOverlayMessage = {
+    type: "SHOW_SCHEDULE_CONFIRMED_NOTICE",
+    payload: { reminderIntervalMinutes: settings.reminderIntervalMinutes }
+  };
+  return sendOverlayMessageToActiveTab(message, false);
+}
+
 async function deliverScheduledReminder(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
   let overlayDelivered = false;
 
@@ -367,6 +375,16 @@ chrome.runtime.onMessage.addListener((message: PopupToBackgroundMessage, _sender
   if (message.type === "HIDE_OVERLAY_ON_CURRENT_TAB") {
     void sendOverlayMessageToActiveTab({ type: "HIDE_STRETCH_REMINDER" }, false).then((payload) => {
       sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload });
+    });
+    return true;
+  }
+
+  if (message.type === "SHOW_SCHEDULE_CONFIRMED_NOTICE") {
+    void getOverlaySettings().then((settings) => {
+      scheduleReminderAlarm(settings);
+      void showScheduleConfirmedNotice(settings).then((payload) => {
+        sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload });
+      });
     });
     return true;
   }
