@@ -671,7 +671,8 @@ function createPingPongFrames<T>(frames: readonly T[]) {
 
 function getAmbientFrames() {
   if (isInitialScheduleNotice) {
-    return [...FRAMES.quietIntro, ...createPingPongFrames(FRAMES.quiet)];
+    const slowQuietFrames = createPingPongFrames(FRAMES.quiet).flatMap((frame) => [frame, frame, frame]);
+    return [...FRAMES.quietIntro, ...slowQuietFrames];
   }
 
   if (isScheduleConfirmedNotice) {
