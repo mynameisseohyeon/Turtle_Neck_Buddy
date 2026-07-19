@@ -845,6 +845,16 @@ function getEdgeSnapFromBounds(left: number, width: number): OverlaySettings["ov
   return null;
 }
 
+function getNearestEdgePosition(): OverlaySettings["overlayPosition"] {
+  const xPercent = overlaySettings.customPosition?.xPercent;
+
+  if (typeof xPercent === "number") {
+    return xPercent <= 50 ? "bottom-left" : "bottom-right";
+  }
+
+  return overlaySettings.overlayPosition;
+}
+
 async function saveCustomPositionFromDrag(left: number, stageTop: number, width: number) {
   const edgeSnap = getEdgeSnapFromBounds(left, width);
   const xPercent = edgeSnap === "bottom-left" ? 0 : edgeSnap === "bottom-right" ? 100 : (left / window.innerWidth) * 100;
@@ -1234,16 +1244,20 @@ function renderOverlay() {
   const shadowRoot = createOverlayHost();
   const currentState = overlayState.visibilityState;
   const host = shadowRoot.host as HTMLElement;
-  host.dataset.position = overlaySettings.overlayPosition;
+  const previousRenderedState = shadowRoot.querySelector<HTMLElement>("[data-overlay-app]")?.dataset.state;
+  // The confirmation briefly borrows the nearest edge without overwriting the user's saved drag position.
+  const temporaryNoticeEdge = isScheduleConfirmedNotice ? getNearestEdgePosition() : null;
+  host.dataset.position = temporaryNoticeEdge ?? overlaySettings.overlayPosition;
 
   if (overlaySettings.customPosition) {
     host.dataset.customPosition = "true";
     const edgeSnap =
-      overlaySettings.customPosition.xPercent === 0
+      temporaryNoticeEdge ??
+      (overlaySettings.customPosition.xPercent === 0
         ? "bottom-left"
         : overlaySettings.customPosition.xPercent === 100
           ? "bottom-right"
-          : null;
+          : null);
     host.dataset.edgeSnapped = String(edgeSnap !== null);
     host.dataset.position = edgeSnap ?? overlaySettings.overlayPosition;
   } else {
@@ -1260,8 +1274,12 @@ function renderOverlay() {
   const overlay = document.createElement("section");
   overlay.dataset.overlayApp = "true";
   overlay.className = "turtle-overlay";
-  overlay.dataset.state =
+  const renderedState =
     currentState === "peeking" && host.dataset.edgeSnapped === "false" ? "idle" : currentState;
+  const shouldAnimateEntry =
+    renderedState !== "hidden" &&
+    (previousRenderedState === "hidden" || isScheduleConfirmedNotice);
+  overlay.dataset.state = shouldAnimateEntry ? "hidden" : renderedState;
   overlay.setAttribute("aria-hidden", "true");
 
 
@@ -1426,6 +1444,7 @@ function renderOverlay() {
   const shouldShowBubble =
     bubbleMode !== "reminder" ||
     isReminderDue ||
+    isScheduleConfirmedNotice ||
     currentState === "alert" ||
     currentState === "stretch" ||
     currentState === "success";
@@ -1460,6 +1479,14 @@ function renderOverlay() {
   mascotStage.append(mascot);
   overlay.append(mascotStage);
   shadowRoot.append(overlay);
+
+  if (shouldAnimateEntry) {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        overlay.dataset.state = renderedState;
+      });
+    });
+  }
 
   const keepCurrentMascotInsideViewport = () => {
     window.requestAnimationFrame(() => {
@@ -1564,7 +1591,7 @@ function showScheduleConfirmedNotice(reminderIntervalMinutes: number) {
     es: `Listo. Nos vemos en ${reminderIntervalMinutes} min!`
   };
   overlayState = {
-    visibilityState: "alert",
+    visibilityState: "peeking",
     turtleState: "idle",
     message: messages[overlaySettings.language]
   };
