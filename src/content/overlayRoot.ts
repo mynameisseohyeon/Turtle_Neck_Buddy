@@ -26,6 +26,7 @@ const STRETCH_PHASE_SECONDS = 10;
 const SUCCESS_VISIBLE_MS = 3500;
 const INITIAL_NOTICE_VISIBLE_MS = 12000;
 const SCHEDULE_CONFIRMED_VISIBLE_MS = 5000;
+const OVERLAY_EXIT_TRANSITION_MS = 520;
 const MIN_REMINDER_INTERVAL_MINUTES = 10;
 const MAX_REMINDER_INTERVAL_MINUTES = 180;
 const REMINDER_INTERVAL_STEP_MINUTES = 10;
@@ -360,6 +361,7 @@ let settingsCountdownTimerId: number | undefined;
 let stretchTimerId: number | undefined;
 let successTimerId: number | undefined;
 let initialNoticeTimerId: number | undefined;
+let hideTransitionTimerId: number | undefined;
 let ambientFrameIndex = 0;
 let pendingReminderIntervalMinutes = DEFAULT_OVERLAY_SETTINGS.reminderIntervalMinutes;
 let stretchStartedAt = 0;
@@ -794,6 +796,15 @@ function clearInitialNoticeTimer() {
   initialNoticeTimerId = undefined;
 }
 
+function clearHideTransition() {
+  if (hideTransitionTimerId === undefined) {
+    return;
+  }
+
+  window.clearTimeout(hideTransitionTimerId);
+  hideTransitionTimerId = undefined;
+}
+
 function stopOverlayAfterContextInvalidated() {
   overlayStopped = true;
   clearReactionAnimation();
@@ -804,6 +815,7 @@ function stopOverlayAfterContextInvalidated() {
   clearStretchTimer();
   clearSuccessTimer();
   clearInitialNoticeTimer();
+  clearHideTransition();
   document.getElementById(OVERLAY_HOST_ID)?.remove();
 }
 
@@ -890,6 +902,7 @@ function returnToWaitingState() {
   clearAmbientAnimation();
   clearStretchTimer();
   clearSuccessTimer();
+  clearHideTransition();
   isReacting = false;
   isPointerDownOnMascot = false;
   hasPlayedShellShoot = false;
@@ -908,6 +921,7 @@ function startStretchRoutine() {
   clearShellShootAnimation();
   clearShellShootLongPress();
   clearAmbientAnimation();
+  clearHideTransition();
   stretchStartedAt = Date.now();
   isReminderDue = false;
   isInitialScheduleNotice = false;
@@ -1537,6 +1551,7 @@ function showReminder() {
     return;
   }
 
+  clearHideTransition();
   isReminderDue = true;
   isInitialScheduleNotice = false;
   isScheduleConfirmedNotice = false;
@@ -1554,6 +1569,7 @@ function showInitialScheduleNotice(reminderIntervalMinutes: number) {
   }
 
   clearInitialNoticeTimer();
+  clearHideTransition();
   isReminderDue = false;
   isInitialScheduleNotice = true;
   isScheduleConfirmedNotice = false;
@@ -1580,6 +1596,7 @@ function showScheduleConfirmedNotice(reminderIntervalMinutes: number) {
   }
 
   clearInitialNoticeTimer();
+  clearHideTransition();
   isReminderDue = false;
   isInitialScheduleNotice = false;
   isScheduleConfirmedNotice = true;
@@ -1599,17 +1616,7 @@ function showScheduleConfirmedNotice(reminderIntervalMinutes: number) {
   initialNoticeTimerId = window.setTimeout(() => hideOverlay(), SCHEDULE_CONFIRMED_VISIBLE_MS);
 }
 
-function hideOverlay() {
-  if (overlayStopped) {
-    return;
-  }
-
-  clearReactionAnimation();
-  clearShellShootAnimation();
-  clearShellShootLongPress();
-  clearAmbientAnimation();
-  clearStretchTimer();
-  clearSuccessTimer();
+function completeOverlayHide() {
   isReacting = false;
   isPointerDownOnMascot = false;
   hasPlayedShellShoot = false;
@@ -1622,6 +1629,35 @@ function hideOverlay() {
     message: ""
   };
   renderOverlay();
+}
+
+function hideOverlay() {
+  if (overlayStopped) {
+    return;
+  }
+
+  clearReactionAnimation();
+  clearShellShootAnimation();
+  clearShellShootLongPress();
+  clearAmbientAnimation();
+  clearStretchTimer();
+  clearSuccessTimer();
+  clearHideTransition();
+
+  const visibleOverlay = document
+    .getElementById(OVERLAY_HOST_ID)
+    ?.shadowRoot?.querySelector<HTMLElement>("[data-overlay-app]");
+
+  if (visibleOverlay && visibleOverlay.dataset.state !== "hidden") {
+    visibleOverlay.dataset.state = "hidden";
+    hideTransitionTimerId = window.setTimeout(() => {
+      hideTransitionTimerId = undefined;
+      completeOverlayHide();
+    }, OVERLAY_EXIT_TRANSITION_MS);
+    return;
+  }
+
+  completeOverlayHide();
 }
 
 function createSettingsBubbleContent() {
