@@ -12,6 +12,7 @@ import {
 
 const REMINDER_ALARM_NAME = "turtle-neck-buddy-reminder";
 const OVERLAY_SCRIPT_FILE = "content/overlay.js";
+const INITIAL_NOTICE_PENDING_STORAGE_KEY = "turtle-neck-buddy-initial-notice-pending";
 
 async function showExtensionNotice(message: string) {
   try {
@@ -195,9 +196,18 @@ async function sendOverlayMessageToActiveTab(
   requirePermission: boolean
 ) {
   const tab = await getActiveTab();
-  const supportedOrigin = getSupportedOrigin(tab?.url);
+  return sendOverlayMessageToTab(tab?.id, tab?.url, message, requirePermission);
+}
 
-  if (!tab?.id || !supportedOrigin) {
+async function sendOverlayMessageToTab(
+  tabId: number | undefined,
+  tabUrl: string | undefined,
+  message: BackgroundToOverlayMessage,
+  requirePermission: boolean
+) {
+  const supportedOrigin = getSupportedOrigin(tabUrl);
+
+  if (!tabId || !supportedOrigin) {
     return { ok: false, reason: "unsupported-url" as const };
   }
 
@@ -209,15 +219,15 @@ async function sendOverlayMessageToActiveTab(
   }
 
   try {
-    await chrome.tabs.sendMessage(tab.id, message);
+    await chrome.tabs.sendMessage(tabId, message);
     return { ok: true };
   } catch {
     try {
       await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
+        target: { tabId },
         files: [OVERLAY_SCRIPT_FILE]
       });
-      await chrome.tabs.sendMessage(tab.id, message);
+      await chrome.tabs.sendMessage(tabId, message);
       return { ok: true };
     } catch {
       return { ok: false, reason: "injection-failed" as const };
@@ -230,7 +240,15 @@ async function showInitialScheduleNotice(settings: Awaited<ReturnType<typeof get
     type: "SHOW_INITIAL_SCHEDULE_NOTICE",
     payload: { reminderIntervalMinutes: settings.reminderIntervalMinutes }
   };
-  await sendOverlayMessageToActiveTab(message, false);
+  return sendOverlayMessageToActiveTab(message, false);
+}
+
+async function showScheduleConfirmedNotice(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
+  const message: BackgroundToOverlayMessage = {
+    type: "SHOW_SCHEDULE_CONFIRMED_NOTICE",
+    payload: { reminderIntervalMinutes: settings.reminderIntervalMinutes }
+  };
+  return sendOverlayMessageToActiveTab(message, false);
 }
 
 async function deliverScheduledReminder(settings: Awaited<ReturnType<typeof getOverlaySettings>>) {
@@ -286,7 +304,11 @@ async function showOverlayFromActionClick(tab: chrome.tabs.Tab) {
 chrome.runtime.onInstalled.addListener(() => {
   void saveDefaultOverlaySettings().then((settings) => {
     scheduleReminderAlarm(settings);
-    void showInitialScheduleNotice(settings);
+    void showInitialScheduleNotice(settings).then(async (result) => {
+      await chrome.storage.local.set({
+        [INITIAL_NOTICE_PENDING_STORAGE_KEY]: !result.ok
+      });
+    });
   });
 });
 
@@ -305,6 +327,28 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
 
     void deliverScheduledReminder(settings);
+  });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete" || !getSupportedOrigin(tab.url)) {
+    return;
+  }
+
+  void chrome.storage.local.get(INITIAL_NOTICE_PENDING_STORAGE_KEY).then(async (stored) => {
+    if (stored[INITIAL_NOTICE_PENDING_STORAGE_KEY] !== true) {
+      return;
+    }
+
+    const settings = await getOverlaySettings();
+    const message: BackgroundToOverlayMessage = {
+      type: "SHOW_INITIAL_SCHEDULE_NOTICE",
+      payload: { reminderIntervalMinutes: settings.reminderIntervalMinutes }
+    };
+    const result = await sendOverlayMessageToTab(tabId, tab.url, message, false);
+    if (result.ok) {
+      await chrome.storage.local.set({ [INITIAL_NOTICE_PENDING_STORAGE_KEY]: false });
+    }
   });
 });
 
@@ -367,6 +411,16 @@ chrome.runtime.onMessage.addListener((message: PopupToBackgroundMessage, _sender
   if (message.type === "HIDE_OVERLAY_ON_CURRENT_TAB") {
     void sendOverlayMessageToActiveTab({ type: "HIDE_STRETCH_REMINDER" }, false).then((payload) => {
       sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload });
+    });
+    return true;
+  }
+
+  if (message.type === "SHOW_SCHEDULE_CONFIRMED_NOTICE") {
+    void getOverlaySettings().then((settings) => {
+      scheduleReminderAlarm(settings);
+      void showScheduleConfirmedNotice(settings).then((payload) => {
+        sendResponse({ type: "OVERLAY_PREVIEW_RESULT", payload });
+      });
     });
     return true;
   }

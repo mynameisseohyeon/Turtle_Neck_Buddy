@@ -48,6 +48,12 @@ export type BackgroundToOverlayMessage =
       };
     }
   | {
+      type: "SHOW_SCHEDULE_CONFIRMED_NOTICE";
+      payload: {
+        reminderIntervalMinutes: number;
+      };
+    }
+  | {
       type: "START_STRETCH_ROUTINE";
     }
   | {
@@ -86,6 +92,9 @@ export type PopupToBackgroundMessage =
     }
   | {
       type: "RESCHEDULE_STRETCH_REMINDER";
+    }
+  | {
+      type: "SHOW_SCHEDULE_CONFIRMED_NOTICE";
     }
   | {
       type: "SNOOZE_STRETCH_REMINDER";

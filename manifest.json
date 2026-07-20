@@ -19,7 +19,7 @@
     "type": "module"
   },
   "permissions": ["storage", "alarms", "notifications", "activeTab", "scripting"],
-  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "host_permissions": ["http://*/*", "https://*/*"],
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],

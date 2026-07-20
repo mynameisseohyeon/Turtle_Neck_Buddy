@@ -25,6 +25,8 @@ const STRETCH_TOTAL_SECONDS = 30;
 const STRETCH_PHASE_SECONDS = 10;
 const SUCCESS_VISIBLE_MS = 3500;
 const INITIAL_NOTICE_VISIBLE_MS = 12000;
+const SCHEDULE_CONFIRMED_VISIBLE_MS = 5000;
+const OVERLAY_EXIT_TRANSITION_MS = 520;
 const MIN_REMINDER_INTERVAL_MINUTES = 10;
 const MAX_REMINDER_INTERVAL_MINUTES = 180;
 const REMINDER_INTERVAL_STEP_MINUTES = 10;
@@ -98,13 +100,18 @@ const FRAMES = {
     "assets/turtle/frames/quiet/quiet_03.png",
     "assets/turtle/frames/quiet/quiet_04.png"
   ],
+  quietIntro: [
+    "assets/turtle/frames/quiet/quiet2_01.png",
+    "assets/turtle/frames/quiet/quiet2_02.png",
+    "assets/turtle/frames/quiet/quiet2_03.png",
+    "assets/turtle/frames/quiet/quiet2_04.png"
+  ],
   tired: [
     "assets/turtle/frames/tired/tired_01.png",
     "assets/turtle/frames/tired/tired_02.png",
     "assets/turtle/frames/tired/tired_03.png",
     "assets/turtle/frames/tired/tired_04.png",
-    "assets/turtle/frames/tired/tired_05.png",
-    "assets/turtle/frames/tired/tired_06.png"
+    "assets/turtle/frames/tired/tired_05.png"
   ],
   drag: [
     "assets/turtle/frames/drag/drag_01.png",
@@ -166,14 +173,14 @@ const PEEKING_AMBIENT_FRAMES = [
 ];
 
 const FRAME_VISUAL_SCALES = {
-  quiet: 1.3,
-  tired: 1.2,
+  quiet: 1,
+  tired: 1,
   drag: 1,
   shellShoot: 1,
-  chinTuck: 0.91,
+  chinTuck: 1,
   neckTilt: 1,
-  shoulderRoll: 0.95,
-  success: 1.18,
+  shoulderRoll: 1,
+  success: 1,
   peeking: 1
 } as const;
 
@@ -354,6 +361,7 @@ let settingsCountdownTimerId: number | undefined;
 let stretchTimerId: number | undefined;
 let successTimerId: number | undefined;
 let initialNoticeTimerId: number | undefined;
+let hideTransitionTimerId: number | undefined;
 let ambientFrameIndex = 0;
 let pendingReminderIntervalMinutes = DEFAULT_OVERLAY_SETTINGS.reminderIntervalMinutes;
 let stretchStartedAt = 0;
@@ -374,6 +382,7 @@ let recentMascotHoverHitPoint = { x: 0, y: 0 };
 let overlayStopped = false;
 let isReminderDue = false;
 let isInitialScheduleNotice = false;
+let isScheduleConfirmedNotice = false;
 
 function normalizeOverlaySettings(value: unknown): OverlaySettings {
   if (!value || typeof value !== "object") {
@@ -664,7 +673,12 @@ function createPingPongFrames<T>(frames: readonly T[]) {
 
 function getAmbientFrames() {
   if (isInitialScheduleNotice) {
-    return createPingPongFrames(FRAMES.quiet);
+    const slowQuietFrames = createPingPongFrames(FRAMES.quiet).flatMap((frame) => [frame, frame, frame]);
+    return [...FRAMES.quietIntro, ...slowQuietFrames];
+  }
+
+  if (isScheduleConfirmedNotice) {
+    return PEEKING_AMBIENT_FRAMES;
   }
 
   if (overlayState.visibilityState === "success") {
@@ -682,9 +696,17 @@ function getAmbientFrames() {
   return isFreelyPositioned ? createPingPongFrames(FRAMES.quiet) : PEEKING_AMBIENT_FRAMES;
 }
 
+function getAmbientLoopStartIndex() {
+  return isInitialScheduleNotice ? FRAMES.quietIntro.length : 0;
+}
+
 function getAmbientFrameInterval() {
   if (isInitialScheduleNotice) {
-    return QUIET_FRAME_INTERVAL_MS;
+    return 210;
+  }
+
+  if (isScheduleConfirmedNotice) {
+    return PEEKING_FRAME_INTERVAL_MS;
   }
 
   if (overlayState.visibilityState === "stretch") {
@@ -774,6 +796,15 @@ function clearInitialNoticeTimer() {
   initialNoticeTimerId = undefined;
 }
 
+function clearHideTransition() {
+  if (hideTransitionTimerId === undefined) {
+    return;
+  }
+
+  window.clearTimeout(hideTransitionTimerId);
+  hideTransitionTimerId = undefined;
+}
+
 function stopOverlayAfterContextInvalidated() {
   overlayStopped = true;
   clearReactionAnimation();
@@ -784,6 +815,7 @@ function stopOverlayAfterContextInvalidated() {
   clearStretchTimer();
   clearSuccessTimer();
   clearInitialNoticeTimer();
+  clearHideTransition();
   document.getElementById(OVERLAY_HOST_ID)?.remove();
 }
 
@@ -825,6 +857,16 @@ function getEdgeSnapFromBounds(left: number, width: number): OverlaySettings["ov
   return null;
 }
 
+function getNearestEdgePosition(): OverlaySettings["overlayPosition"] {
+  const xPercent = overlaySettings.customPosition?.xPercent;
+
+  if (typeof xPercent === "number") {
+    return xPercent <= 50 ? "bottom-left" : "bottom-right";
+  }
+
+  return overlaySettings.overlayPosition;
+}
+
 async function saveCustomPositionFromDrag(left: number, stageTop: number, width: number) {
   const edgeSnap = getEdgeSnapFromBounds(left, width);
   const xPercent = edgeSnap === "bottom-left" ? 0 : edgeSnap === "bottom-right" ? 100 : (left / window.innerWidth) * 100;
@@ -860,11 +902,13 @@ function returnToWaitingState() {
   clearAmbientAnimation();
   clearStretchTimer();
   clearSuccessTimer();
+  clearHideTransition();
   isReacting = false;
   isPointerDownOnMascot = false;
   hasPlayedShellShoot = false;
   isReminderDue = false;
   isInitialScheduleNotice = false;
+  isScheduleConfirmedNotice = false;
   bubbleMode = "reminder";
   overlayState = { ...WAITING_OVERLAY_STATE };
   renderOverlay();
@@ -877,9 +921,11 @@ function startStretchRoutine() {
   clearShellShootAnimation();
   clearShellShootLongPress();
   clearAmbientAnimation();
+  clearHideTransition();
   stretchStartedAt = Date.now();
   isReminderDue = false;
   isInitialScheduleNotice = false;
+  isScheduleConfirmedNotice = false;
   const copy = getOverlayCopy();
   overlayState = {
     visibilityState: "stretch",
@@ -1025,6 +1071,7 @@ function startAmbientAnimation(mascot: HTMLImageElement) {
 
   const frames = getAmbientFrames();
   const interval = getAmbientFrameInterval();
+  const loopStartIndex = Math.min(getAmbientLoopStartIndex(), frames.length - 1);
   ambientFrameIndex = 0;
   if (!setMascotFrame(mascot, frames[ambientFrameIndex])) {
     return;
@@ -1035,11 +1082,11 @@ function startAmbientAnimation(mascot: HTMLImageElement) {
       return;
     }
 
-    if (overlayState.visibilityState === "alert" && ambientFrameIndex >= frames.length - 1) {
-      return;
+    ambientFrameIndex += 1;
+    if (ambientFrameIndex >= frames.length) {
+      ambientFrameIndex = loopStartIndex;
     }
 
-    ambientFrameIndex = (ambientFrameIndex + 1) % frames.length;
     if (!setMascotFrame(mascot, frames[ambientFrameIndex])) {
       clearAmbientAnimation();
       return;
@@ -1211,16 +1258,20 @@ function renderOverlay() {
   const shadowRoot = createOverlayHost();
   const currentState = overlayState.visibilityState;
   const host = shadowRoot.host as HTMLElement;
-  host.dataset.position = overlaySettings.overlayPosition;
+  const previousRenderedState = shadowRoot.querySelector<HTMLElement>("[data-overlay-app]")?.dataset.state;
+  // The confirmation briefly borrows the nearest edge without overwriting the user's saved drag position.
+  const temporaryNoticeEdge = isScheduleConfirmedNotice ? getNearestEdgePosition() : null;
+  host.dataset.position = temporaryNoticeEdge ?? overlaySettings.overlayPosition;
 
   if (overlaySettings.customPosition) {
     host.dataset.customPosition = "true";
     const edgeSnap =
-      overlaySettings.customPosition.xPercent === 0
+      temporaryNoticeEdge ??
+      (overlaySettings.customPosition.xPercent === 0
         ? "bottom-left"
         : overlaySettings.customPosition.xPercent === 100
           ? "bottom-right"
-          : null;
+          : null);
     host.dataset.edgeSnapped = String(edgeSnap !== null);
     host.dataset.position = edgeSnap ?? overlaySettings.overlayPosition;
   } else {
@@ -1237,8 +1288,12 @@ function renderOverlay() {
   const overlay = document.createElement("section");
   overlay.dataset.overlayApp = "true";
   overlay.className = "turtle-overlay";
-  overlay.dataset.state =
+  const renderedState =
     currentState === "peeking" && host.dataset.edgeSnapped === "false" ? "idle" : currentState;
+  const shouldAnimateEntry =
+    renderedState !== "hidden" &&
+    (previousRenderedState === "hidden" || isScheduleConfirmedNotice);
+  overlay.dataset.state = shouldAnimateEntry ? "hidden" : renderedState;
   overlay.setAttribute("aria-hidden", "true");
 
 
@@ -1403,6 +1458,7 @@ function renderOverlay() {
   const shouldShowBubble =
     bubbleMode !== "reminder" ||
     isReminderDue ||
+    isScheduleConfirmedNotice ||
     currentState === "alert" ||
     currentState === "stretch" ||
     currentState === "success";
@@ -1437,6 +1493,14 @@ function renderOverlay() {
   mascotStage.append(mascot);
   overlay.append(mascotStage);
   shadowRoot.append(overlay);
+
+  if (shouldAnimateEntry) {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        overlay.dataset.state = renderedState;
+      });
+    });
+  }
 
   const keepCurrentMascotInsideViewport = () => {
     window.requestAnimationFrame(() => {
@@ -1487,8 +1551,10 @@ function showReminder() {
     return;
   }
 
+  clearHideTransition();
   isReminderDue = true;
   isInitialScheduleNotice = false;
+  isScheduleConfirmedNotice = false;
   overlayState = {
     visibilityState: "peeking",
     turtleState: "idle",
@@ -1503,11 +1569,13 @@ function showInitialScheduleNotice(reminderIntervalMinutes: number) {
   }
 
   clearInitialNoticeTimer();
+  clearHideTransition();
   isReminderDue = false;
   isInitialScheduleNotice = true;
+  isScheduleConfirmedNotice = false;
   const messages: Record<OverlayLanguage, string> = {
-    en: "Click the Turtle Neck Buddy icon above to get started!",
-    ko: "오른쪽 위 Turtle Neck Buddy 아이콘을 클릭해 시작해요!",
+    en: "Click the Turtle Neck Buddy Chrome extension icon to get started!",
+    ko: "Turtle Neck Buddy 크롬 확장자 아이콘을 클릭해 시작해요!",
     ja: "右上のTurtle Neck Buddyアイコンをクリックして始めましょう！",
     zh: "点击右上角的Turtle Neck Buddy图标开始吧！",
     es: "Haz clic en el icono de Turtle Neck Buddy para empezar!"
@@ -1522,6 +1590,47 @@ function showInitialScheduleNotice(reminderIntervalMinutes: number) {
   initialNoticeTimerId = window.setTimeout(() => hideOverlay(), INITIAL_NOTICE_VISIBLE_MS);
 }
 
+function showScheduleConfirmedNotice(reminderIntervalMinutes: number) {
+  if (overlayStopped) {
+    return;
+  }
+
+  clearInitialNoticeTimer();
+  clearHideTransition();
+  isReminderDue = false;
+  isInitialScheduleNotice = false;
+  isScheduleConfirmedNotice = true;
+  const messages: Record<OverlayLanguage, string> = {
+    en: `All set. See you in ${reminderIntervalMinutes} min!`,
+    ko: `설정됐어요. ${reminderIntervalMinutes}분 뒤에 다시 봐요!`,
+    ja: `設定できました。${reminderIntervalMinutes}分後にまたね！`,
+    zh: `设置好了。${reminderIntervalMinutes}分钟后见！`,
+    es: `Listo. Nos vemos en ${reminderIntervalMinutes} min!`
+  };
+  overlayState = {
+    visibilityState: "peeking",
+    turtleState: "idle",
+    message: messages[overlaySettings.language]
+  };
+  renderOverlay();
+  initialNoticeTimerId = window.setTimeout(() => hideOverlay(), SCHEDULE_CONFIRMED_VISIBLE_MS);
+}
+
+function completeOverlayHide() {
+  isReacting = false;
+  isPointerDownOnMascot = false;
+  hasPlayedShellShoot = false;
+  isReminderDue = false;
+  isInitialScheduleNotice = false;
+  isScheduleConfirmedNotice = false;
+  overlayState = {
+    ...overlayState,
+    visibilityState: "hidden",
+    message: ""
+  };
+  renderOverlay();
+}
+
 function hideOverlay() {
   if (overlayStopped) {
     return;
@@ -1533,17 +1642,22 @@ function hideOverlay() {
   clearAmbientAnimation();
   clearStretchTimer();
   clearSuccessTimer();
-  isReacting = false;
-  isPointerDownOnMascot = false;
-  hasPlayedShellShoot = false;
-  isReminderDue = false;
-  isInitialScheduleNotice = false;
-  overlayState = {
-    ...overlayState,
-    visibilityState: "hidden",
-    message: ""
-  };
-  renderOverlay();
+  clearHideTransition();
+
+  const visibleOverlay = document
+    .getElementById(OVERLAY_HOST_ID)
+    ?.shadowRoot?.querySelector<HTMLElement>("[data-overlay-app]");
+
+  if (visibleOverlay && visibleOverlay.dataset.state !== "hidden") {
+    visibleOverlay.dataset.state = "hidden";
+    hideTransitionTimerId = window.setTimeout(() => {
+      hideTransitionTimerId = undefined;
+      completeOverlayHide();
+    }, OVERLAY_EXIT_TRANSITION_MS);
+    return;
+  }
+
+  completeOverlayHide();
 }
 
 function createSettingsBubbleContent() {
@@ -1608,13 +1722,13 @@ function createSettingsBubbleContent() {
   confirmButton.addEventListener("click", (event) => {
     event.stopPropagation();
     bubbleMode = "reminder";
-    overlayState = { ...WAITING_OVERLAY_STATE };
+    const nextReminderIntervalMinutes = pendingReminderIntervalMinutes;
     void updateOverlaySettings({
       ...overlaySettings,
-      reminderIntervalMinutes: pendingReminderIntervalMinutes,
+      reminderIntervalMinutes: nextReminderIntervalMinutes,
       lastReminderShownAt: new Date().toISOString(),
-      nextReminderAt: new Date(Date.now() + pendingReminderIntervalMinutes * 60_000).toISOString()
-    });
+      nextReminderAt: new Date(Date.now() + nextReminderIntervalMinutes * 60_000).toISOString()
+    }).then(() => showScheduleConfirmedNotice(nextReminderIntervalMinutes));
   });
   intervalGroup.append(decreaseButton, intervalValue, increaseButton, confirmButton);
 
@@ -1869,6 +1983,10 @@ try {
 
     if (message.type === "SHOW_INITIAL_SCHEDULE_NOTICE") {
       showInitialScheduleNotice(message.payload.reminderIntervalMinutes);
+    }
+
+    if (message.type === "SHOW_SCHEDULE_CONFIRMED_NOTICE") {
+      showScheduleConfirmedNotice(message.payload.reminderIntervalMinutes);
     }
 
     if (message.type === "START_STRETCH_ROUTINE") {
